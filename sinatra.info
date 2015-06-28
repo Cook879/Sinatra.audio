@@ -1,0 +1,4 @@
+name = Sinatra
+description = Custom Sinatra module
+core = 7.x
+package = Sinatra

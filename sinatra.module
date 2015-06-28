@@ -1,0 +1,2178 @@
+<?php
+/**
+ * @file
+ * Sets up the recording databases
+ */
+function sinatra_menu() {
+
+	$items = array(
+		'recording/%' => array(
+			'title' => 'Viewing recording',
+			'page callback' => 'sinatra_view_recording',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+
+		),
+		'song/%' => array(
+			'title' => 'Viewing song',
+			'page callback' => 'sinatra_view_song',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
+		'album/%' => array(
+			'title' => 'Viewing album',
+			'page callback' => 'sinatra_view_album',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
+		'concert/%' => array(
+			'title' => 'Viewing concert',
+			'page callback' => 'sinatra_view_concert',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
+		'radio/%' => array(
+			'title' => 'Viewing radio',
+			'page callback' => 'sinatra_view_radio',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
+		'television/%' => array(
+			'title' => 'Viewing television',
+			'page callback' => 'sinatra_view_television',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
+		'film/%' => array(
+			'title' => 'Viewing film',
+			'page callback' => 'sinatra_view_film',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
+		'person/%' => array(
+			'title' => 'Viewing person',
+			'page callback' => 'sinatra_view_person',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
+		'random' => array(
+			'title' => 'Random',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('recording'),
+			'access callback' => TRUE,
+		),
+		'random/recording' => array(
+			'title' => 'Recording',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('recording'),
+			'access callback' => TRUE,
+		),
+		'random/song' => array(
+			'title' => 'Song',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('song'),
+			'access callback' => TRUE,
+		),
+		'random/album' => array(
+			'title' => 'Album',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('album'),
+			'access callback' => TRUE,
+		),
+		'random/concert' => array(
+			'title' => 'Concert',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('concert'),
+			'access callback' => TRUE,
+		),
+		'random/radio' => array(
+			'title' => 'Radio',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('radio'),
+			'access callback' => TRUE,
+		),
+		'random/television' => array(
+			'title' => 'Television',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('television'),
+			'access callback' => TRUE,
+		),
+		'random/film' => array(
+			'title' => 'Film',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('film'),
+			'access callback' => TRUE,
+		),
+		'random/person' => array(
+			'title' => 'Person',
+			'page callback' => 'sinatra_random',
+			'page arguments' => array('person'),
+			'access callback' => TRUE,
+		),
+		'on_this_day' => array(
+			'title' => 'On this day',
+			'page callback' => 'sinatra_on_this_day_today',
+			'access callback' => TRUE,
+		),
+		'on_this_day/%/%' => array(
+			'title' => 'On this day',
+			'page callback' => 'sinatra_on_this_day',
+			'page arguments' => array(1,2),
+			'access callback' => TRUE,
+		),
+		'browse' => array(
+			'title' => 'Browse',
+			'page callback' => 'sinatra_browse',
+			'access callback' => TRUE,
+		),
+	);
+
+	return $items;
+}
+
+function sinatra_view_recording ($id) {
+	global $base_url, $user;
+	
+	// Check the recording exists
+	$recording_id = db_query('SELECT recording_id FROM `sinatra_recording` WHERE recording_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+
+	if( $recording_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+	else {	
+		// SQL TIME!
+		$recording_query = db_query('SELECT * FROM `sinatra_recording`, `sinatra_session_recording` WHERE sinatra_recording.recording_id = :id AND sinatra_session_recording.recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAssoc();
+		
+		//print_r($recording_query);
+										
+		$recording_song_query = db_query('SELECT * FROM `sinatra_recording_song` WHERE sinatra_recording_song.recording_id = :id ORDER BY medley_position',
+								array(
+									':id' => $id,
+								))->fetchAll();
+										
+		$song_ids = array(count($recording_song_query));
+		
+		$i = 0;
+		foreach ( $recording_song_query as $record ) {
+			$song_ids[$i] = $record->song_id;
+			$i++;
+		}
+
+		$song_query_2 = db_query('SELECT * FROM `sinatra_song` WHERE song_id IN (:id)',
+								array(
+									':id' => $song_ids,
+								))->fetchAllAssoc('song_id');
+				
+		$song_query = array(count($recording_song_query));
+		$i = 0;
+		foreach( $recording_song_query as $record ) {
+			$song_query[$i] = $song_query_2[$record->song_id];
+			$i++;
+		}	
+
+		//print_r($song_query);		
+		
+		$session_query = db_query('SELECT * FROM `sinatra_session` WHERE session_id = :id',
+								array(
+									':id' => $recording_query['session_id'],
+								))->fetchAssoc();
+
+		$artist_display = db_query('SELECT display_name FROM `sinatra_artist_display` WHERE display_id = :id',
+								array(
+									':id' => $recording_query['artist_display'],
+								))->fetchField();
+				
+		if( $recording_query['project_type'] == "concert" ) {
+			$project_id_query = db_query('SELECT concert_id FROM `sinatra_recording_concert` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAll();
+					
+			$project_ids = array();
+		
+			foreach ( $project_id_query as $proj ) {
+				$project_ids[] = $proj->concert_id;
+			}
+					
+			$project_query = db_query('SELECT * FROM `sinatra_concert` WHERE concert_id IN (:id)',
+									array(
+										':id' => $project_ids,
+									))->fetchAll();	
+		} else if ($recording_query['project_type'] == "radio"){
+			$project_id_query = db_query('SELECT radio_id FROM `sinatra_recording_radio` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAll();
+					
+			$project_ids = array();
+		
+			foreach ( $project_id_query as $proj ) {
+				$project_ids[] = $proj->radio_id;
+			}
+					
+			$project_query = db_query('SELECT * FROM `sinatra_radio` WHERE radio_id IN (:id)',
+									array(
+										':id' => $project_ids,
+									))->fetchAll();	
+		} else if ($recording_query['project_type'] == "film"){
+			$project_id_query = db_query('SELECT film_id FROM `sinatra_recording_film` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAll();
+					
+			$project_ids = array();
+		
+			foreach ( $project_id_query as $proj ) {
+				$project_ids[] = $proj->film_id;
+			}
+					
+			$project_query = db_query('SELECT * FROM `sinatra_film` WHERE film_id IN (:id)',
+									array(
+										':id' => $project_ids,
+									))->fetchAll();	
+		} else if ($recording_query['project_type'] == "television"){
+			$project_id_query = db_query('SELECT television_id FROM `sinatra_recording_television` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAll();
+					
+			$project_ids = array();
+		
+			foreach ( $project_id_query as $proj ) {
+				$project_ids[] = $proj->television_id;
+			}
+					
+			$project_query = db_query('SELECT * FROM `sinatra_television` WHERE television_id IN (:id)',
+									array(
+										':id' => $project_ids,
+									))->fetchAll();	
+		} else {
+			$project_id_query = db_query('SELECT album_id FROM `sinatra_recording_album` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAll();
+					
+			$project_ids = array();
+		
+			foreach ( $project_id_query as $proj ) {
+				$project_ids[] = $proj->album_id;
+			}
+					
+			$project_query = db_query('SELECT * FROM `sinatra_album` WHERE album_id IN (:id)',
+									array(
+										':id' => $project_ids,
+									))->fetchAll();	
+		}
+		// Set title
+		//$titleMinusDate = create_song_title($song_query);
+		$titleMinusDate = get_recording_name($id);		$title = $titleMinusDate . ' - ' .  $session_query['date_display'];	
+		drupal_set_title($title);
+		
+		// Display artist, open rec and rec-left-col
+		$output = '<h3>' . $artist_display . '</h3><div id="rec"><div id="rec-left-col">';
+							
+		// Info table
+		// Empty table == broken
+		$output .= '<table class="infobox">';
+		
+		// Do for medleys
+		foreach( $song_query as $song ) {
+			$output .= '<tr><td id="table_title" colspan="2" align="center"><b><a href="' . $base_url . '/song/' . $song->song_id .'">' . $song->title . '</a></b></td><tr>';
+			// Writers
+			$output .= get_writers($song->song_id);
+		}
+		if( count($song_query) > 1 ) {
+			$output .= '<tr><td id="table_title" colspan="2" align="center"><b>Medley</b></td></tr>';
+		}
+		
+		// Arrangers
+		$arrangers = db_query('SELECT person_id FROM `sinatra_recording_person` WHERE recording_id = :id AND role_id = :role',
+					array(
+						':id' => $id,
+						':role' => 3,
+					))->fetchAllAssoc('person_id');
+						
+		if( $arrangers != null ){
+			$output .= '<tr><td class="table_title">Arranged by</td><td class="table_contents">';
+			foreach ($arrangers as $person) {
+				$output .= '<a href="' . $base_url . '/person/' . $person->person_id . '">' . get_name($person->person_id) . '</a><br/>';
+			}
+			$output .= '</td></tr>';
+		}
+		// Type
+		$output .= '<tr><td class="table_title">Type</td><td class="table_contents">' . $recording_query['type'] . '</td></tr>';
+		
+		// album
+		$count = count($project_query);
+		if( $count > 0 ) {
+			if( $recording_query['project_type'] == "concert" ) {
+				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Concert</td>';
+				foreach( $project_query as $proj ) {
+					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/concert/' . $proj->concert_id . '">' . $proj->location . ' - ' . $proj->date_display . '</a></td></tr>';
+				}
+			} else if ( $recording_query['project_type'] == "radio" ) {
+				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Radio</td>';
+				foreach( $project_query as $proj ) {
+					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/radio/' . $proj->radio_id . '"><i>' . $proj->series . '</i> #' . $proj->episode .' (' .$proj->network . ', ' . $proj->date_display . ')</a></td></tr>';
+				}
+			} else if ( $recording_query['project_type'] == "film" ) {
+				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Film</td>';
+				foreach( $project_query as $proj ) {
+					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/film/' . $proj->film_id . '"><i>' . $proj->title .'</i> (' . $proj->studio . ', ' . $proj->date_display . ')</a></td></tr>';
+				}
+			} else if ( $recording_query['project_type'] == "television" ) {
+				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Television</td>';
+				foreach( $project_query as $proj ) {
+					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/television/' . $proj->television_id . '"><i>' . $proj->series . '</i>';
+					
+					if( $proj->episode != null ) 
+						$output .= '#' . $proj->episode;
+
+					$output .= ' (' .$proj->network . ', ' . $proj->date_display . ')</a></td></tr>';
+				}
+			}else {
+				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Album</td>';
+				foreach( $project_query as $proj ) {
+					if( $proj->label != null )
+						$output .= '<td class="table_contents"><i>' . '<a href="' . $base_url . '/album/' . $proj->album_id . '">' . $proj->title . '</a></i> (' . $proj->label . ', ' . $proj->date . ')</td></tr>';
+					else 
+						$output .= '<td class="table_contents"><i>' . '<a href="' . $base_url . '/album/' . $proj->album_id . '">' . $proj->title . '</a></i> (' . $proj->date . ')</td></tr>';
+				}
+			}			
+		}
+		
+		// Length
+		if( $recording_query['length'] != null )
+			$output .= '<tr><td class="table_title">Length</td><td class="table_contents">' . $recording_query['length'] . '</td></tr>';
+		
+		$output .= '</table>';
+		
+		// End rec-col-left
+		$output .= '</div>';
+
+		// Set up tabs, open rec-right-col
+		$output .= '<div id="rec-right-col">';
+		drupal_add_js(drupal_get_path('module', 'sinatra') .'/tabber-minimized.js');
+
+		// Personnel
+		$output .= '<div class="tabber">
+     <div class="tabbertab"><h2>Personnel</h2>
+      ' . sinatra_view_recording_personnel($id) . '
+     </div>';
+
+     if( $recording_query['lyrics'] != null ) {
+		 $output .= '<div class="tabbertab"> <h2>Lyrics</h2>
+      ' . sinatra_view_recording_lyrics($recording_query['lyrics']) . '
+     </div>';
+	 }
+
+	 if( $user->uid > 0 ) 
+		$output .= sinatra_view_recording_listen($id);
+	 
+	 $output .= '
+	 
+	 <div class="tabbertab"> <h2>Related</h2>
+	  ' . sinatra_view_recording_related($id, $recording_query['session_id'], $project_query, $titleMinusDate, $song_query, $session_query['date_display'], $recording_query['type'], $recording_query['project_type'], $session_query['date'],$recording_query['session_position']) . '
+	  </div> ';
+	  
+	  	if( $recording_query['notes'] != null ) {
+			$output .= '<div class="tabbertab"> <h2>Notes</h2><p>' . $recording_query['notes'] . '</p></div>';
+		} 
+		$output .= '
+    </div> 
+   </div>
+  </div>
+';
+		
+		// Close rec-col-right
+		$output .= '</div></div>';
+		
+
+		// Close rec
+		$output .= '</div>';
+
+		return $output;
+	}
+}
+
+function sinatra_view_recording_personnel ($id) {
+	global $base_url;
+
+	$output = '<table class="infobox"><tr><th class="table_title">Role</th><th class="table_title">Person</th></tr>';
+		
+	$personnel_query = db_query('SELECT * FROM `sinatra_recording_person` WHERE recording_id = :id',
+			array(
+				':id' => $id,
+			));
+		
+	$people_id = array();
+	$role_id = array();
+	$personnel_query_2 = array();
+		
+	foreach ($personnel_query as $record) {
+		$people_id[] = $record->person_id;
+		$role_id[] = $record->role_id;
+		
+		$personnel_query_2[] = $record;
+	}
+	
+	$personnel_query = $personnel_query_2;
+		
+	if($people_id != null) {
+		$name_query = db_query('SELECT person_id, first_name, surname FROM `sinatra_person` WHERE person_id IN (:id)',
+				array(
+					':id' => $people_id,
+					))->fetchAllAssoc('person_id');
+					
+		$role_query = db_query('SELECT role_id, name FROM `sinatra_role` WHERE role_id IN (:id)',
+				array(
+					':id' => $role_id,
+				))->fetchAllAssoc('role_id');
+						
+			$sort_array = array();
+			
+			foreach ($personnel_query as $record) {
+				if( $record->role_id != 3 ) {
+					$role_object = $role_query[$record->role_id];
+					$role_name = $role_object->name;
+					
+					$person_object = $name_query[$record->person_id];
+					
+					$sort_array[$role_name][] = array( $record->person_id, $person_object->first_name, $person_object->surname );
+				}
+			}
+			
+			
+			uksort ($sort_array, "sort_personnel");
+			
+			foreach( $sort_array as $key => $value ) {
+				if( $key == 'arranger' )
+					continue;
+				
+				
+				$output .= '<tr><td class="table_contents">' . $key . '</td><td class="table_contents">';
+				
+				uasort($value, "sort_names_personnel");
+				
+				foreach( $value as $person ) {
+					$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+				}
+				$output .= '</td></tr>';	
+			}
+			
+			
+			
+		}
+		$output .= '</table>';
+		return $output;
+}
+
+function sinatra_view_recording_listen ($id) {	
+	$listen_query = db_query('SELECT source, id FROM `sinatra_recording_source` WHERE recording_id = :id',
+		array(
+			':id' => $id,
+		));
+				
+	$output = '';
+	
+	if( $listen_query->rowCount() > 0 ) {
+		$output .= '<div class="tabbertab"> <h2>Listen</h2>';
+		
+		foreach( $listen_query as $link )
+			if( $link->source == 'YouTube' ) {
+				$output .= '<iframe class="listen" width="420" height="315" src="//www.youtube.com/embed/' . $link->id . '" frameborder="0" allowfullscreen></iframe>';
+			} else if ( $link->source == 'Spotify' ) {
+				$output .= '<iframe class="listen" src="https://embed.spotify.com/?uri=spotify:track:' . $link->id . '" width="300" height="380" frameborder="0" allowtransparency="true"></iframe>';
+			} else if( $link->source == 'Dailymotion' ) {
+				$output .= '<iframe frameborder="0" width="480" height="270" src="//www.dailymotion.com/embed/video/' .$link->id .'"allowfullscreen></iframe>';
+			}
+		$output .= '</div>';
+	}
+	return $output;
+}
+
+function sinatra_view_recording_lyrics ($lyrics) {
+
+	return '<h3>Lyrics</h3> <p id=lyrics> ' . $lyrics . '</p>';
+}
+
+function sinatra_view_recording_related ($id, $session_id, $project_query, $title, $song_query, $display_date, $type, $project_type, $date, $pos) {
+	global $base_url;
+	
+	$output = '<div id="related">';
+	
+	// Session
+	$output .= '<table class="infobox"><tr><th class="table_title related_title">This session</th>';
+	
+	if( $project_type == "concert" )
+		$output .= '<th class="table_title related_title">This concert</th>';
+	else if( $project_type == "radio" )
+		$output .= '<th class="table_title related_title">This radio show</th>';
+	else if( $project_type == "film" )
+		$output .= '<th class="table_title related_title">This film</th>';
+	else if( $project_type == "television" )
+		$output .= '<th class="table_title related_title">This television show</th>';
+	else 
+		$output .= '<th class="table_title related_title">This album</th>';
+		
+		
+	$output .= '<th class="table_title related_title">This song</th></tr>';   
+	
+	
+	$same_date = db_query('SELECT recording_id, session_position FROM `sinatra_session_recording` WHERE session_id = :id ORDER BY session_position',
+				array(
+					':id' => $session_id,
+				))->fetchAll();
+				
+	// TODO Check maintains order
+	
+	$output .= '<tr><td class="table_contents"><ol>';
+	
+	foreach ($same_date as $record) {
+		$rec_id = $record->recording_id;
+		if($rec_id == $id) {
+			$output .= '<li><b>' . $title . '</b></li>';
+		} else {
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+		}
+	}
+	
+	$output .= '</ol></td>';
+			
+	if( $project_type == "concert" ) {				
+		$output .= '<td class="table_contents">';
+		foreach( $project_query as $proj ) {
+			if( count($project_query) > 1 ) {
+				$output .= '<b><i>' . $proj->title . '</i></b>';
+			} 
+			$output .= '<ol>';
+			$same_project = db_query('SELECT recording_id, concert_position FROM `sinatra_recording_concert` WHERE concert_id = :id ORDER BY concert_position',
+					array(
+						':id' => $proj->concert_id,
+					))->fetchAll();
+		
+			foreach ($same_project as $record) {
+				$rec_id = $record->recording_id;
+				if($rec_id == $id) {
+					$output .= '<li><b>' . $title . '</b></li>';
+				} else {
+					$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+				}
+			}
+			$output .= '</ol>';
+		}
+		$output .= '</td>';		
+	} else if ( $project_type == "radio" ) {
+		$output .= '<td class="table_contents">';
+		foreach( $project_query as $proj ) {
+			if( count($project_query) > 1 ) {
+				$output .= '<i>' .$proj->series . ' #' . $proj->episode .' (' .$proj->network . ', ' . $proj->date_display . ')</i>';
+			} 
+			$output .= '<ol>';
+			$same_project = db_query('SELECT recording_id, radio_position FROM `sinatra_recording_radio` WHERE radio_id = :id ORDER BY radio_position',
+					array(
+						':id' => $proj->radio_id,
+					))->fetchAll();
+		
+			foreach ($same_project as $record) {
+				$rec_id = $record->recording_id;
+				if($rec_id == $id) {
+					$output .= '<li><b>' . $title . '</b></li>';
+				} else {
+					$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+				}
+			}
+			$output .= '</ol>';
+		}
+		$output .= '</td>';		
+	} else if ( $project_type == "film" ) {
+		$output .= '<td class="table_contents">';
+		foreach( $project_query as $proj ) {
+			if( count($project_query) > 1 ) {
+				$output .= '<i>' . $proj->title . ' (' .$proj->studio . ', ' . $proj->date_display . ')</i>';
+			} 
+			$output .= '<ol>';
+			$same_project = db_query('SELECT recording_id, film_position FROM `sinatra_recording_film` WHERE film_id = :id ORDER BY film_position',
+					array(
+						':id' => $proj->film_id,
+					))->fetchAll();
+		
+			foreach ($same_project as $record) {
+				$rec_id = $record->recording_id;
+				if($rec_id == $id) {
+					$output .= '<li><b>' . $title . '</b></li>';
+				} else {
+					$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+				}
+			}
+			$output .= '</ol>';
+		}
+		$output .= '</td>';		
+	} else if ( $project_type == "television" ) {
+		$output .= '<td class="table_contents">';
+		foreach( $project_query as $proj ) {
+			if( count($project_query) > 1 ) {
+				$output .= '<i>' .$proj->series . ' #' . $proj->episode .' (' .$proj->network . ', ' . $proj->date_display . ')</i>';
+			} 
+			$output .= '<ol>';
+			$same_project = db_query('SELECT recording_id, television_position FROM `sinatra_recording_television` WHERE television_id = :id ORDER BY television_position',
+					array(
+						':id' => $proj->television_id,
+					))->fetchAll();
+		
+			foreach ($same_project as $record) {
+				$rec_id = $record->recording_id;
+				if($rec_id == $id) {
+					$output .= '<li><b>' . $title . '</b></li>';
+				} else {
+					$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+				}
+			}
+			$output .= '</ol>';
+		}
+		$output .= '</td>';		
+	}else {
+		$output .= '<td class="table_contents">';
+		foreach( $project_query as $proj ) {
+			if( count($project_query) > 1 ) {
+				$output .= '<b><i>' . $proj->title . '</i></b>';
+			}
+			$output .= '<ol>';
+			$same_project = db_query('SELECT recording_id, album_position FROM `sinatra_recording_album` WHERE album_id = :id ORDER BY album_position',
+					array(
+						':id' => $proj->album_id,
+					))->fetchAll();
+		
+			foreach ($same_project as $record) {
+				$rec_id = $record->recording_id;
+				if($rec_id == $id) {
+					$output .= '<li><b>' . $title . '</b></li>';
+				} else {
+					$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+				}
+			}
+			$output .= '</ol>';
+		}
+		$output .= '</td>';
+	}			
+	
+	$output .= '<td class="table_contents">';
+	foreach( $song_query as $song ) {
+		if( count($song_query) > 1 ) {
+			$output .= '<b>' . $song->title . '</b>';
+		} 
+		$output .= '<ol>';
+		$same_project = db_query('SELECT recording_id FROM `sinatra_recording_song` WHERE song_id = :id ORDER BY medley_position',
+				array(
+					':id' => $song->song_id,
+				))->fetchAll();
+	
+		$recordings = array();
+		
+		foreach ($same_project as $record) {
+			$rec_id = $record->recording_id;
+			
+			if( $rec_id == $id ) {
+				$recordings[][] = array($rec_id, $display_date, $type, $date, $pos,$session_id);
+			} else {
+				$type_query = db_query('SELECT type FROM `sinatra_recording` WHERE recording_id = :id',
+					array(
+						':id' => $record->recording_id,
+					))->fetchField();
+			
+				$recording_query = db_query('SELECT * FROM `sinatra_session_recording` WHERE recording_id = :id',
+									array(
+										':id' => $record->recording_id,
+									))->fetchAll();
+								
+				$session_query = db_query('SELECT * FROM `sinatra_session` WHERE session_id = :id',
+									array(
+										':id' => $recording_query[0]->session_id,
+									))->fetchAll();
+				$recordings[][] = array($record->recording_id, $session_query[0]->date_display, $type_query, $session_query[0]->date, $recording_query[0]->session_position,$recording_query[0]->session_id);
+			}
+		}
+		
+		usort($recordings, 'sort_session');
+		
+		foreach ( $recordings as $record ) {
+			if($record[0][0] == $id) {
+				$output .= '<li><b>' . $record[0][1] . ' (' . $record[0][2] . ')</b></li>';
+			} else {
+				$output .= '<li><a href="' . $base_url . '/recording/' . $record[0][0] . '">' . $record[0][1] . ' (' . $record[0][2] . ')</a></li>';
+			}
+		}
+		$output .= '</ol>';
+	}
+	$output .= '</td>';	
+	
+	$output .= '</table></div>';
+	
+	return $output;
+}
+
+function sinatra_view_song ($id) {
+	global $base_url;
+
+	// Check the song exists
+	$song_id = db_query('SELECT song_id FROM `sinatra_song` WHERE song_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	if( $song_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+	else {	
+		// Get the full details of the songs
+		$song_query = db_query('SELECT * FROM `sinatra_song` WHERE song_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();
+				
+		//print_r($song_query);
+		
+		// TITLE
+		$title = $song_query['title'];	
+		drupal_set_title($title);
+
+		$output = '<table class="infobox">';
+		$output .= get_writers($id);
+		if( $song_query['source'] != null )  {
+			$output .= '<tr><td class="table_title">Source</td><td class="table_contents"><i>';
+			if( $song_query['source_link'] != null ) {
+				$output .= '<a href="http://en.wikipedia.org/wiki/' . $song_query['source_link'] . '">' . $song_query['source'] . '</a>';
+			} else {
+				$output .= $song_query['source'];
+			}
+			$output .= '</i></td></tr>';
+		}
+		if( $song_query['year'] != null )
+			$output .= '<tr><td class="table_title">Year</td><td class="table_contents">' . $song_query['year'] . '</td></tr>';
+		if( $song_query['song_link'] != null ) 
+			$output .= '<tr><td class="table_contents" colspan="2" align="center"><a href="http://en.wikipedia.org/wiki/' . $song_query['song_link'] . '">Wikipedia</a></td></tr>';
+		
+		$output .= '</table>';
+				
+		$recording_list = db_query('SELECT recording_id, parody FROM `sinatra_recording_song` WHERE song_id = :id ORDER BY medley_position',				
+				array(
+					':id' => $id,
+				));
+				
+		$output .= '<h3>Recordings</h3><ul>';
+		$recordings = array();
+		
+		foreach ($recording_list as $record) {
+			$type_query = db_query('SELECT type FROM `sinatra_recording` WHERE recording_id = :id',
+				array(
+					':id' => $record->recording_id,
+				))->fetchField();
+		
+			$recording_query = db_query('SELECT * FROM `sinatra_session_recording` WHERE recording_id = :id',
+								array(
+									':id' => $record->recording_id,
+								))->fetchAll();
+							
+			$session_query = db_query('SELECT * FROM `sinatra_session` WHERE session_id = :id',
+								array(
+									':id' => $recording_query[0]->session_id,
+								))->fetchAll();
+			$recordings[][] = array($record->recording_id, $session_query[0]->date_display, $type_query, $session_query[0]->date, $recording_query[0]->session_position, $recording_query[0]->session_id,$record->parody);
+		}
+		
+		usort($recordings, 'sort_session');
+
+		foreach( $recordings as $record ) {
+			if( $record[0][6] == 1 ) {
+				$output .= '<li><a href="' . $base_url . '/recording/' . $record[0][0] . '">' . $record[0][1] . ' (parody) (' . $record[0][2] . ')</a></li>';
+			} else	{
+				$output .= '<li><a href="' . $base_url . '/recording/' . $record[0][0] . '">' . $record[0][1] . ' (' . $record[0][2] . ')</a></li>';
+			}		}
+		$output .= '</ul>';
+		
+		if( $song_query['notes'] != null )
+			$output .= '<h3>Notes</h3><p>' . $song_query['notes'] . '</p>';
+
+		
+		return $output;
+	}
+}
+
+function sort_session($a, $b) {
+	$date_a = $a[0][3];
+	$date_b = $b[0][3];
+	
+	if( $date_a > $date_b )
+		return 1;
+	if( $date_a < $date_b )
+		return -1;
+	
+	$order_a = $a[0][4];
+	$order_b = $b[0][4];
+	
+	if( $order_a > $order_b ) 
+		return 1;
+	if( $order_a < $order_b )
+		return -1;
+	
+	return 0;
+}
+function sinatra_view_album ($id) {
+	global $base_url, $user;
+
+	// Check the album exists
+	$album_id = db_query('SELECT album_id FROM `sinatra_album` WHERE album_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	if( $album_id != $id ) 
+		return '<p>Error - album does not exist.</p>';
+	else {	
+		// Get the full details of the recording
+		$album_query = db_query('SELECT * FROM `sinatra_album` WHERE album_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();
+				
+		// TITLE
+		$title = $album_query['title'];	
+		drupal_set_title($title);
+
+		$output = '<table class="infobox">';
+		if( $album_query['label'] != null )
+			$output .= '<tr><td class="table_title">Label</td><td class="table_contents">' . $album_query['label'] . '</td></tr>';
+		$output .= '<tr><td class="table_title">Date</td><td class="table_contents">' . $album_query['date'] . '</td></tr>';
+		
+		if( $album_query['wikipedia'] != null ) 
+			$output .= '<tr><td colspan="2" align="center"><a href="http://en.wikipedia.org/wiki/' . $album_query['wikipedia'] . '">Wikipedia</a></td></tr>';
+		
+		$output .= '</table>';
+		
+		
+		$output .= '<h3>Tracklist</h3>';
+	$same_date = db_query('SELECT recording_id, album_position FROM `sinatra_recording_album` WHERE album_id = :id ORDER BY album_position',
+				array(
+					':id' => $id,
+				))->fetchAll();
+			
+	// TODO Check maintains order
+	
+	$output .= '<ol>';
+	
+	foreach ($same_date as $record) {
+		$rec_id = $record->recording_id;
+		$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+	}
+	
+	$output .= '</ol>';
+	
+	if( $album_query['youtube'] != null && $user->uid > 0 )
+		$output .= '<h3>Listen</h3><iframe width="560" height="315" src="https://www.youtube.com/embed/videoseries?list=' . $album_query['youtube'] . '" frameborder="0" allowfullscreen></iframe>';
+	
+	if( $album_query['notes'] != null )
+		$output .= '<h3>Notes</h3><p>' . $album_query['notes'] . '</p>';
+				
+	return $output;
+	}
+	
+
+}
+
+function sinatra_view_concert ($id) {
+	global $base_url, $user;
+
+	// Check the concert exists
+	$concert_id = db_query('SELECT concert_id FROM `sinatra_concert` WHERE concert_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	if( $concert_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+	else {	
+		// Get the full details of the concert
+		$concert_query = db_query('SELECT * FROM `sinatra_concert` WHERE concert_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();
+				
+		// TITLE
+		$title = $concert_query['date_display'] . ' - ' . $concert_query['location'];	
+		drupal_set_title($title);
+		
+		$output = '<h3>Tracklist</h3>';
+		$same_date = db_query('SELECT recording_id, concert_position FROM `sinatra_recording_concert` WHERE concert_id = :id ORDER BY concert_position',
+				array(
+					':id' => $id,
+				))->fetchAll();
+				
+		// TODO Check maintains order
+	
+		$output .= '<ol>';
+	
+		foreach ($same_date as $record) {
+			$rec_id = $record->recording_id;
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+		}
+	
+		$output .= '</ol>';
+		
+		if( $concert_query['source'] != null && $user->uid > 0)
+			$output .= '<h3>Listen</h3><iframe class="listen" width="420" height="315" src="//www.youtube.com/embed/' . $concert_query['source'] . '" frameborder="0" allowfullscreen></iframe>';
+				
+		if( $concert_query['notes'] != null )
+			$output .= '<h3>Notes</h3><p>' . $concert_query['notes'] . '</p>';
+		
+
+		return $output;
+	}
+}
+
+function sinatra_view_radio ($id) {
+	global $base_url, $user;
+
+	// Check the radio exists
+	$radio_id = db_query('SELECT radio_id FROM `sinatra_radio` WHERE radio_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	if( $radio_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+	else {	
+		// Get the full details of the radio
+		$radio_query = db_query('SELECT * FROM `sinatra_radio` WHERE radio_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();
+				
+		// TITLE
+		$title = $radio_query['series'] . ' #' . $radio_query['episode'] . ' (' . $radio_query['date_display'] . ')';	
+		drupal_set_title($title);
+
+		$output = '<table class="infobox">';
+		$output .= '<tr><td class="table_title">Network</td><td class="table_contents">' . $radio_query['network'] . '</td></tr>';
+		if( $radio_query['sponser'] != null ) 
+			$output .= '<tr><td class="table_title">Sponsor</td><td class="table_contents">' . $radio_query['sponser'] . '</td></tr>';
+		
+		$output .= '</table>';
+				
+		$output .= '<h3>Tracklist</h3>';
+		$same_date = db_query('SELECT recording_id, radio_position FROM `sinatra_recording_radio` WHERE radio_id = :id ORDER BY radio_position',
+				array(
+					':id' => $id,
+				))->fetchAll();
+				
+		// TODO Check maintains order
+		
+		$output .= '<ol>';
+		
+		foreach ($same_date as $record) {
+			$rec_id = $record->recording_id;
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+		}
+		
+		$output .= '</ol>';
+		
+		$radio_person = db_query('SELECT * FROM `sinatra_radio_person` WHERE radio_id = :id',
+						array(
+							':id' => $id,
+						));
+		if( $radio_person->rowCount() > 0 ) {
+			$output .= '<h3>Credits</h3><table class="infobox"><tr><th class="table_title">Role</th><th class="table_title">Person</th></tr>';
+
+			$people_id = array();
+			$role_id = array();
+			$personnel_query = array();
+			
+			foreach ($radio_person as $record) {
+				$people_id[] = $record->person_id;
+				$role_id[] = $record->role_id;
+		
+				$personnel_query[] = $record;
+			}
+			
+			$name_query = db_query('SELECT person_id, first_name, surname FROM `sinatra_person` WHERE person_id IN (:id)',
+				array(
+					':id' => $people_id,
+					))->fetchAllAssoc('person_id');
+					
+			$role_query = db_query('SELECT role_id, name FROM `sinatra_role` WHERE role_id IN (:id)',
+				array(
+					':id' => $role_id,
+				))->fetchAllAssoc('role_id');
+						
+			$sort_array = array();
+			
+			foreach ($personnel_query as $record) {
+				$role_object = $role_query[$record->role_id];
+				$role_name = $role_object->name;
+					
+				$person_object = $name_query[$record->person_id];
+					
+				$sort_array[$role_name][] = array( $record->person_id, $person_object->first_name, $person_object->surname );
+			}
+				
+			uksort ($sort_array, "sort_radio_personnel");
+			foreach( $sort_array as $key => $value ) {
+				$output .= '<tr><td class="table_contents">' . $key . '</td><td class="table_contents">';
+				
+				uasort($value, "sort_names_personnel");
+				
+				foreach( $value as $person ) {
+					$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+				}
+				$output .= '</td></tr>';
+			}
+		
+			$output .= '</table>';
+		}
+		
+		if( $radio_query['youtube'] != null && $user->uid > 0 )
+			$output .= '<h3>Listen</h3><iframe class="listen" width="420" height="315" src="//www.youtube.com/embed/' . $radio_query['youtube'] . '" frameborder="0" allowfullscreen></iframe>';
+		
+		if( $radio_query['script'] != null ) 
+			$output .= '<h3>Script</h3><p>' . $radio_query['script'] . '</p>';
+		
+
+		if( $radio_query['notes'] != null )
+			$output .= '<h3>Notes</h3><p>' . $radio_query['notes'] . '</p>';
+		
+		return $output;
+	}
+}
+
+
+function sinatra_view_television ($id) {
+	global $base_url;
+
+	// Check the television exists
+	$television_id = db_query('SELECT television_id FROM `sinatra_television` WHERE television_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	if( $television_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+	else {	
+		// Get the full details of the television
+		$television_query = db_query('SELECT * FROM `sinatra_television` WHERE television_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();
+				
+		// TITLE
+		$title = $television_query['series'] . ' #' . $television_query['episode'] . ' (' . $television_query['date_display'] . ')';	
+		drupal_set_title($title);
+
+		$output = '<table class="infobox">';
+		$output .= '<tr><td class="table_title">Network</td><td class="table_contents">' . $television_query['network'] . '</td></tr>';
+		
+		$output .= '</table>';
+		
+		$output .= '<h3>Tracklist</h3>';
+		$same_date = db_query('SELECT recording_id, television_position FROM `sinatra_recording_television` WHERE television_id = :id ORDER BY television_position',
+				array(
+					':id' => $id,
+				))->fetchAll();
+				
+		// TODO Check maintains order
+	
+		$output .= '<ol>';
+	
+		foreach ($same_date as $record) {
+			$rec_id = $record->recording_id;
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+		}
+	
+		$output .= '</ol>';
+	
+		$television_person = db_query('SELECT * FROM `sinatra_television_person` WHERE television_id = :id',
+					array(
+						':id' => $id,
+					));
+					
+		if( $television_person->rowCount() > 0 ) {
+			$output .= '<h3>Credits</h3><table>';
+
+			foreach ($television_person as $record) {
+				$output .= '<tr><td>' . get_role_name($record->role_id) . '</td><td>' . get_name($record->person_id) . '</td></tr>';
+			}
+		
+			$output .= '</table>';		
+		}
+		
+		if( $television_query['script'] != null ) {
+			$output .= '<h3>Script</h3><p>' . $television_query['script'] . '</p>';
+		}
+		
+		if( $television_query['notes'] != null )
+			$output .= '<h3>Notes</h3><p>' . $television_query['notes'] . '</p>';
+
+		return $output;	
+	}
+}
+
+
+function sinatra_view_film ($id) {
+	global $base_url;
+
+	// Check the film exists
+	$film_id = db_query('SELECT film_id FROM `sinatra_film` WHERE film_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	if( $film_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+	else {	
+		// Get the full details of the film
+		$film_query = db_query('SELECT * FROM `sinatra_film` WHERE film_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();
+				
+		// TITLE
+		$title = $film_query['title'];	
+		drupal_set_title($title);
+
+		$output = '<table class="infobox">';
+		$output .= '<tr><td class="table_title">Studio</td><td class="table_contents">' . $film_query['studio'] . '</td></tr>';
+		$output .= '<tr><td class="table_title">Released</td><td class="table_contents">' . $film_query['date_display'] . '</td></tr>';
+		
+		$output .= '</table>';
+		
+		
+		$output .= '<h3>Tracklist</h3>';
+		$same_date = db_query('SELECT recording_id, film_position FROM `sinatra_recording_film` WHERE film_id = :id ORDER BY film_position',
+				array(
+					':id' => $id,
+				))->fetchAll();
+				
+		// TODO Check maintains order
+	
+		$output .= '<ol>';
+	
+		foreach ($same_date as $record) {
+			$rec_id = $record->recording_id;
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec_id . '">' . get_recording_name($rec_id) . '</a></li>';
+		}
+	
+		$output .= '</ol>';
+	
+		if( $film_query['script'] != null ) {
+			$output .= '<h3>Script</h3><p>' . $film_query['script'] . '</p>';
+		}
+	
+		$film_person = db_query('SELECT * FROM `sinatra_film_person` WHERE film_id = :id',
+					array(
+						':id' => $id,
+					));
+		
+		if( $film_person->rowCount() > 0 ) {
+			$output .= '<h3>Credits</h3><table>';
+	
+			foreach ($film_person as $record) {
+				$output .= '<tr><td>' . get_role_name($record->role_id) . '</td><td>' . get_name($record->person_id) . '</td></tr>';
+			}
+		
+			$output .= '</table>';
+		}
+		
+		if( $film_query['notes'] != null )
+			$output .= '<h3>Notes</h3><p>' . $film_query['notes'] . '</p>';
+
+		return $output;
+	}
+}
+
+function sinatra_view_person ($id) {
+	global $base_url;
+
+	// Check the person exists
+	$person_id = db_query('SELECT person_id FROM `sinatra_person` WHERE person_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	if( $person_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+		//return '<p>Error - person does not exist.</p>';
+	else {	
+		// Get the full details of the person
+		$person_query = db_query('SELECT * FROM `sinatra_person` WHERE person_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();
+				
+		//print_r($person_query);
+		
+		// TITLE
+		$title = $person_query['first_name'] . ' ' . $person_query['surname'];	
+		drupal_set_title($title);
+
+		$output = '';
+				
+		$song_query = db_query('SELECT song_id, role_id, notes FROM `sinatra_song_person` WHERE person_id = :id',
+				array(
+					':id' => $id,
+				));
+		$track_query = db_query('SELECT recording_id, role_id, notes FROM `sinatra_recording_person` WHERE person_id = :id',
+				array(
+					':id' => $id,
+				));
+				
+		if( $song_query->rowCount() > 0 ) {
+			$output .= '<h3>Songs</h3>';
+		
+			$songs = array();
+			
+			foreach ($song_query as $record) {
+				$songs[get_role_name($record->role_id)][] = array( $record->song_id, get_song_name_year($record->song_id) );
+			}
+			
+			ksort($songs);
+			
+			foreach ($songs as $role=>$records) {
+				$output .= '<h4>' . $role . '</h4><div class="person-recording"><ul>';
+				uasort($records, "sort_name");
+				foreach($records as $record) {
+					$output .= '<li><a href="' . $base_url . '/song/' . $record[0] . '">' . $record[1] .'</a></li>';
+				}
+				$output .= '</ul></div>';
+			}
+		}
+
+		if( $track_query->rowCount() > 0 ) {
+			$output .= '<h3>Recordings</h3>';
+
+			$songs = array();
+			
+			foreach ($track_query as $record) {
+					$recording_query = db_query('SELECT * FROM `sinatra_recording` WHERE recording_id = :id',
+								array(
+									':id' => $record->recording_id,
+								))->fetchAssoc();
+					
+					$recording_song_query = db_query('SELECT * FROM `sinatra_recording_song` WHERE sinatra_recording_song.recording_id = :id ORDER BY medley_position',
+						array(
+								':id' => $record->recording_id,
+						))->fetchAll();
+										
+					$song_ids = array(count($recording_song_query));
+		
+					$i = 0;
+					foreach ( $recording_song_query as $record2 ) {
+						$song_ids[$i] = $record2->song_id;
+						$i++;
+					}
+
+					// Not needed no more?
+					$song_query_2 = db_query('SELECT * FROM `sinatra_song` WHERE song_id IN (:id)',
+											array(
+												':id' => $song_ids,
+											))->fetchAllAssoc('song_id');
+							
+					$song_query = array(count($recording_song_query));
+					$i = 0;
+					foreach( $recording_song_query as $record2 ) {
+						$song_query[$i] = $song_query_2[$record2->song_id];
+						$i++;
+					}				
+						
+					$recording_session_query = db_query('SELECT session_id, session_position FROM `sinatra_session_recording` WHERE recording_id = :id',
+												array(
+													':id' => $record->recording_id,
+												))->fetchAssoc();
+		
+					$session_query = db_query('SELECT date_display, date FROM `sinatra_session` WHERE session_id = :id',
+												array(
+													':id' => $recording_session_query['session_id'],
+												))->fetchAssoc();
+				
+					$songs[get_role_name($record->role_id)][] = array( $record->recording_id, get_recording_name($record->recording_id),  $session_query['date'], $recording_session_query['session_position'], $session_query['date_display'], $recording_query['type'] );
+			}
+			
+			uksort($songs, "sort_personnel");
+			
+			foreach ($songs as $role=>$records) {
+				$output .= '<h4>' . $role . '</h4><div class="person-recording"><ul>';
+				uasort($records, "sort_recording");			
+				foreach($records as $record) {
+					$output .= '<li><a href="' . $base_url . '/recording/' . $record[0] . '">' . $record[1] . ' - ' . $record[4] . ' (' . $record[5] . ')' .'</a></li>';
+				}
+				$output .= '</ul></div>';
+			}
+			
+			
+		}
+		
+		$radio_query = db_query('SELECT radio_id, role_id FROM `sinatra_radio_person` WHERE person_id = :id',
+				array(
+					':id' => $id,
+				));
+		if( $radio_query->rowCount() > 0 ) {
+			$output .= '<h3>Radio Shows</h3>';
+			$radio = array();
+			
+			foreach ($radio_query as $record) {
+					$recording_query = db_query('SELECT * FROM `sinatra_radio` WHERE radio_id = :id',
+								array(
+									':id' => $record->radio_id,
+								))->fetchAssoc();
+										
+					$radio[get_role_name($record->role_id)][] = array( $recording_query['radio_id'], $recording_query['series'],$recording_query['episode'],$recording_query['date'], $recording_query['date_display'] );
+			}
+			
+			uksort($radio, "sort_radio_personnel");
+			
+			foreach ($radio as $role=>$records) {
+				$output .= '<h4>' . $role . '</h4><div class="person-recording"><ul>';
+				uasort($records, "sort_episode");			
+				foreach($records as $record) {
+					$output .= '<li><a href="' . $base_url . '/radio/' . $record[0] . '">' . $record[1] . ' #' . $record[2] . ' - ' . $record[4] .'</a></li>';
+				}
+				$output .= '</ul></div>';
+			}
+			
+			
+		}	
+		
+		if( $person_query['notes'] != null || $person_query['wikipedia'] != null )
+			$output .= '<h3>Notes</h3><p>' . $person_query['notes'] . '</p>';
+		if( $person_query['wikipedia'] != null )
+			$output .= '<p><a href="http://en.wikipedia.org/wiki/' . $person_query['wikipedia'] . '">Wikipedia page</a></p>';
+		return $output;
+	}
+}
+function get_name($id) {
+	$name_query = db_query('SELECT * FROM `sinatra_person` WHERE person_id = :id',
+					array(
+						':id' => $id,
+					))->fetchAssoc();
+	return $name_query['first_name'] . ' ' . $name_query['surname'];
+}
+
+function get_name_array($id) {
+	$name_query = db_query('SELECT * FROM `sinatra_person` WHERE person_id = :id',
+					array(
+						':id' => $id,
+					))->fetchAssoc();
+	return array($id,$name_query['first_name'],$name_query['surname']);
+}
+
+function get_song_name($id) {
+	return db_query('SELECT title FROM `sinatra_song` WHERE song_id = :id',
+					array(
+						':id' => $id,
+					))->fetchField();
+}
+
+function get_song_name_year($id) {
+	$query = db_query('SELECT title, year FROM `sinatra_song` WHERE song_id = :id',
+					array(
+						':id' => $id,
+					))->fetchAssoc();
+	if( $query['year'] == null )
+		return $query['title'];
+	return $query['title'] . ' (' . $query['year'] . ')';		
+}
+
+function get_role_name($id) {
+	return db_query('SELECT name FROM `sinatra_role` WHERE role_id = :id',
+					array(
+						':id' => $id,
+					))->fetchField();
+}
+
+function get_recording_name($id) {
+	$recording_query = db_query('SELECT * FROM `sinatra_recording_song` WHERE recording_id = :id ORDER BY medley_position',
+								array(
+									':id' => $id,
+								))->fetchAll();
+		
+	$song_ids = array(count($recording_query));
+		
+	$i = 0;
+	foreach ( $recording_query as $record ) {
+		$song_ids[$i] = $record->song_id;
+		$i++;
+	}
+						
+	$song_query = db_query('SELECT title FROM `sinatra_song` WHERE song_id IN (:id)',
+								array(
+									':id' => $song_ids,
+								))->fetchAll();
+	$song_title = create_song_title($song_query);
+	
+	if( $record->parody == 1 )
+		return $song_title . ' (parody)';
+	return $song_title;
+}
+
+function get_recording_date($id) {
+	$recording_query = db_query('SELECT session_id FROM `sinatra_session_recording` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchField();
+								
+	$session_query = db_query('SELECT date_display FROM `sinatra_session` WHERE session_id = :id',
+								array(
+									':id' => $recording_query,
+								))->fetchField();
+	
+	return $session_query;
+}
+
+function get_recording_people_display($id) {
+	$recording_query = db_query('SELECT * FROM `sinatra_recording` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAssoc();
+								
+	$recording_song_query = db_query('SELECT * FROM `sinatra_recording_song` WHERE recording_id = :id ORDER BY medley_position',
+								array(
+									':id' => $id,
+								))->fetchAssoc();
+								
+	$recording_session_query = db_query('SELECT session_id FROM `sinatra_session_recording` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchField();
+								
+	$song_query = db_query('SELECT title FROM `sinatra_song` WHERE song_id = :id',
+								array(
+									':id' => $recording_song_query['song_id'],
+								))->fetchField();
+	$session_query = db_query('SELECT date_display FROM `sinatra_session` WHERE session_id = :id',
+								array(
+									':id' => $recording_session_query,
+								))->fetchField();
+
+	return $song_query . ' - ' . $session_query . ' (' . $recording_query['type'] . ')';
+
+}
+
+function sort_personnel($a, $b) {
+		
+	$order = array('Trumpet', 'Flugelhorn', 'Trombone', 'Bass trombone', 'Valve trombone', 'Horn','French horn', 'Tuba', 'Reeds', 'Saxophone', 'Woodwinds', 'Alto saxophone', 'Tenor saxophone', 'Baritone saxophone', 'Clarinet', 'Bass clarinet','Contra-clarinet', 'Flute','Alto flute','Bass flute', 'Bassoon','Oboe', 'Piccolo', 'English horn','Strings','Concertmaster', 'Violin', 'Viola', 'Cello', 'Harp','Piano', 'Celeste','Fender Rhodes piano','Organ', 'Accordion', 'Harmonica','Harpsichord','Synthesizer','Cordovox','Guitar','Classic guitar','Electric guitar', 'Banjo','Bass', 'Electric bass', 'Fender bass','Fender upright bass', 'Drums', 'Percussion', 'Vibraphone', 'Timpani', 'Conga', 'Bongos', 'Cymbals', 'Chimes', 'Bells', 'Mallets', 'Effects', 'Vocals', 'Soloist','Soprano','Backing vocals', 'Additional vocals', 'Vocal group', 'Vocal director', 'Vocal arranger', 'Conductor', 'Additional conducting', 'Leader', 'Orchestra', 'Contractor', 'Producer');
+	
+	$pos_a = array_search($a, $order);
+	$pos_b = array_search($b, $order);
+	
+	if( $pos_a > $pos_b )
+		return 1;
+	if( $pos_a < $pos_b )
+		return -1;
+	return 0;
+}
+
+function sort_names_personnel( $a, $b ) {
+	$name_a = $a[2];
+	$name_b = $b[2];
+	
+	if( $name_a > $name_b )
+		return 1;
+	if( $name_a < $name_b )
+		return -1;
+	
+	// same surname
+	$name_a = $a[1];
+	$name_b = $b[1];
+	
+	if( $name_a > $name_b )
+		return 1;
+	if( $name_a < $name_b )
+		return -1;
+
+	
+	return 0;
+	
+}
+
+function get_writers($ids) {
+	global $base_url;
+	
+	$song_person = db_query('SELECT * FROM `sinatra_song_person` WHERE song_id IN (:id)',
+					array(
+						':id' => $ids,
+					));
+
+	$composers = array();
+	$lyricists = array();
+	// Crappy hacky way
+	$frenchLyricists = array();
+	$italianLyricists = array();
+	$germanLyricists = array();
+	$englishTranslation = array();
+	$basedOn = array();
+		
+	foreach ($song_person as $record) {
+		// 16 is composer
+		if( $record->role_id == 4 )
+			$composers[] = $record->person_id;
+		else if( $record->role_id == 5 )
+		// Need to add languages and translations here
+			$lyricists[] = $record->person_id;
+		else if( $record->role_id == 10 )
+			$germanLyricists[] = $record->person_id;
+		else if( $record->role_id == 25 )
+			$frenchLyricists[] = $record->person_id;
+		else if( $record->role_id == 31 )
+			$italianLyricists[] = $record->person_id;
+		else if( $record->role_id == 11 )
+			$englishTranslation[] = $record->person_id;
+		else if( $record->role_id == 60 )
+			$basedOn[] = $record->person_id;	}
+	
+	if( empty($composers) && empty($lyricists) && empty($germanLyricists) && empty($frenchLyricists) && empty($italianLyricists) && empty($englishTranslation) && empty($basedOn) ) {
+		return '';
+	} else if ( $composers == $lyricists && empty($germanLyricists) && empty($frenchLyricists) && empty($italianLyricists) && empty($englishTranslation) ) {
+		$output = '<tr><td class="table_title">Music and Lyrics by</td><td class="table_contents">';
+		$names = array();
+		foreach ($composers as $person) {
+			$names[] = get_name_array($person);
+		}
+		uasort($names, 'sort_people');
+		foreach($names as $person) {
+			$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+		}
+		
+		if( !empty($basedOn) ) {
+			$output .= '<tr><td class="table_title">Based on music by</td><td class="table_contents">';
+			
+			$names = array();
+			foreach ($basedOn as $person) {
+				$names[] = get_name_array($person);
+			}
+			uasort($names, 'sort_people');
+			foreach($names as $person) {
+				$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+			}
+		}
+		
+		$output .= '</td></tr>';
+	} else {
+		$output = '<tr><td class="table_title">Music by</td><td class="table_contents">';
+		$names = array();
+		foreach ($composers as $person) {
+			$names[] = get_name_array($person);
+		}
+		uasort($names, 'sort_people');
+		foreach($names as $person) {
+			$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+		}
+
+		$output .= '</td></tr>';
+		
+		if( !empty($lyricists) ) {
+			$output .= '<tr><td class="table_title">Lyrics by</td><td class="table_contents">';
+			$names = array();
+			foreach ($lyricists as $person) {
+				$names[] = get_name_array($person);
+			}
+			uasort($names, 'sort_people');
+			foreach($names as $person) {
+				$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+			}
+
+			$output .= '</td></tr>';
+		}
+		
+		if( !empty( $frenchLyricists ) ) {
+			$output .= '<tr><td class="table_title">French Lyrics by</td><td class="table_contents">';
+		$names = array();
+		foreach ($frenchLyricists as $person) {
+			$names[] = get_name_array($person);
+		}
+		uasort($names, 'sort_people');
+		foreach($names as $person) {
+			$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+		}
+
+			$output .= '</td></tr>';
+		}	
+
+		if( !empty( $germanLyricists ) ) {
+			$output .= '<tr><td class="table_title">German Lyrics by</td><td class="table_contents">';
+		$names = array();
+		foreach ($germanLyricists as $person) {
+			$names[] = get_name_array($person);
+		}
+		uasort($names, 'sort_people');
+		foreach($names as $person) {
+			$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+		}
+
+			$output .= '</td></tr>';
+		}		
+
+		if( !empty( $italianLyricists ) ) {
+			$output .= '<tr><td class="table_title">Italian Lyrics by</td><td class="table_contents">';
+		$names = array();
+		foreach ($italianLyricists as $person) {
+			$names[] = get_name_array($person);
+		}
+		uasort($names, 'sort_people');
+		foreach($names as $person) {
+			$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+		}
+
+			$output .= '</td></tr>';
+		}		
+		
+		if( !empty( $englishTranslation ) ) {
+			$output .= '<tr><td class="table_title">English Lyrics by</td><td class="table_contents">';
+		$names = array();
+		foreach ($englishTranslation as $person) {
+			$names[] = get_name_array($person);
+		}
+		uasort($names, 'sort_people');
+		foreach($names as $person) {
+			$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+		}
+
+			$output .= '</td></tr>';
+		}		
+
+		if( !empty($basedOn) ) {
+			$output .= '<tr><td class="table_title">Based on music by</td><td class="table_contents">';
+			
+			$names = array();
+			foreach ($basedOn as $person) {
+				$names[] = get_name_array($person);
+			}
+			uasort($names, 'sort_people');
+			foreach($names as $person) {
+				$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+			}
+		}		
+	}
+	return $output;
+}
+
+function sinatra_random($type) {
+	global $base_url;
+	
+	$url = $base_url . '/' . $type . '/';
+
+	switch( $type ) {
+		case "recording":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_recording`')->fetchField();
+			break;
+		case "person":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_person`')->fetchField();
+			break;
+		case "song":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_song`')->fetchField();
+			break;
+		case "album":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_album`')->fetchField();
+			break;
+		case "concert":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_concert`')->fetchField();
+			break;
+		case "radio":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_radio`')->fetchField();
+			break;
+		case "television":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_television`')->fetchField();
+			break;
+		case "film":
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_film`')->fetchField();	
+			break;
+		default:
+			$count = db_query('SELECT COUNT(*) FROM `sinatra_recording`')->fetchField();
+			break;
+	}
+	
+	
+	$id = rand(1, $count);
+	
+	$url .= $id;
+	
+	drupal_goto($url);
+	
+	return '';
+}
+
+function sinatra_on_this_day_today() {
+	return sinatra_on_this_day(date('F'), date('d'));
+}
+
+function sinatra_on_this_day($monthStr, $day) {
+	global $base_url;
+	
+	$date = date_parse($monthStr);
+	$month = $date['month'];
+	
+	$query = db_query('SELECT * FROM `sinatra_session` WHERE MONTH(date) = :month AND DAYOFMONTH(date) = :day',
+		array(
+			':month' => $month,
+			':day' => $day,
+		))->fetchAll();	
+		
+	drupal_set_title('On this day - ' . ucfirst($monthStr)  . ' ' . $day);
+	
+	$recordings = array();
+	
+	foreach( $query as $session ) {
+		$date = date_parse($session->date);
+		$year = $date['year'];
+		
+		$rec_query = db_query('SELECT recording_id FROM `sinatra_session_recording` WHERE session_id = :id',
+			array(
+				':id' => $session->session_id,
+			))->fetchAll();
+		
+		foreach( $rec_query as $rec ) {
+			$song_query = db_query('SELECT recording_id, song_id FROM `sinatra_recording_song` WHERE recording_id = :id ORDER BY medley_position',
+				array(
+					':id' => $rec->recording_id,
+				))->fetchAll();
+				
+			$recordings[$year][] = $song_query;
+		}
+	}
+			//print_r($recordings);
+	
+	
+	
+	$output = day_month_selector($monthStr, $day);
+	
+	ksort($recordings);
+		
+	foreach( $recordings as $year=>$tracks ) {
+		$output .= '<h3>' . $year . '</h3><ul>';
+		foreach( $tracks as $track ) {
+		
+		
+			$output .= '<li><a href="' . $base_url . '/recording/' . $track[0]->recording_id . '">' . get_recording_name($track[0]->recording_id) . '</a></li>';
+
+		}
+		$output .= '</ul>';
+	}
+
+	
+	return $output;
+}
+
+function create_song_title($song_query) {
+	if( count( $song_query ) == 1 ) {
+		return $song_query[0]->title;
+	} else {
+		$title = "";
+		foreach($song_query as $record) {
+			$title .= $record->title;
+			$title .= " / ";
+		}
+		$title = substr($title, 0, strlen($title)-3);
+		return $title;
+	}
+}
+
+function get_recording_type($id) {
+	return db_query('SELECT type FROM `sinatra_recording` WHERE recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchField();
+									
+}
+
+function day_month_selector($monthStr, $day) {
+	drupal_add_js(drupal_get_path('module', 'sinatra') .'/sinatra.js');
+
+	$output = '<form>
+	<select name="month" id="monthSelect" onchange="monthSelector(this.value)" size="1">';
+	
+	$monthNames = ["January", "February", "March", "April", "May", "June",
+		"July", "August", "September", "October", "November", "December" ];
+
+	foreach( $monthNames as $month ) {
+		if( $month == $monthStr ) {
+			$output .= '<option value="' . $month . '" selected="selected">' . $month . '</option>';
+		} else {
+			$output .= '<option value="' . $month . '">' . $month . '</option>';
+		}
+	}
+
+	$output .= '</select><select name="day" id="daySelect" size="1">';
+
+	if( $monthStr == "February" ) {
+		$noDays = 29;
+	} else if( $monthStr == "April" || $monthStr == "June" || $monthStr == "September" || $monthStr == "November" ) {
+		$noDays = 30;
+	} else {
+		$noDays = 31;
+	}
+
+	
+	for( $i = 1; $i <= $noDays; $i++ ) {
+		if( $i < 10 ) {
+			$iStr = '0' . strVal( $i );
+		} else {
+			$iStr = strVal( $i );
+		}
+		
+		if( $iStr == $day ) {
+			$output .= '<option value="' . $iStr . '" selected="selected">' . $iStr . '</option>';
+		} else {
+			$output .= '<option value="' . $iStr . '">' . $iStr . '</option>';
+		}
+	}	
+	$output .= '</select>
+			<input type="button" onclick="changePage(daySelect.value, monthSelect.value)" value="Go">
+		</form>';
+	return $output;
+}
+
+function sinatra_browse() {
+	drupal_add_js(drupal_get_path('module', 'sinatra') .'/tabber-minimized.js');
+
+	$output = '<div class="tabber">
+     <div class="tabbertab"><h2>Recordings</h2>
+      ' . sinatra_browse_recordings() . '
+     </div>';
+	$output .= '<div class="tabbertab"><h2>Songs</h2>
+	 '	. sinatra_browse_songs() . '
+	 </div>';
+	$output .= '<div class="tabbertab"><h2>People</h2>
+	 '	. sinatra_browse_people() . '
+	 </div>';
+	$output .= '<div class="tabbertab"><h2>Albums</h2>
+	 '	. sinatra_browse_albums() . '
+	 </div>';
+	$output .= '<div class="tabbertab"><h2>Concerts</h2>
+	 '	. sinatra_browse_concerts() . '
+	 </div>';
+	$output .= '<div class="tabbertab"><h2>Radio</h2>
+	 '	. sinatra_browse_radio() . '
+	 </div>';
+	$output .= '<div class="tabbertab"><h2>Television</h2>
+	 '	. sinatra_browse_television() . '
+	 </div>';
+	$output .= '<div class="tabbertab"><h2>Film</h2>
+	 '	. sinatra_browse_film() . '
+	 </div>';
+	$output .= '</div>';
+	return $output;
+}
+
+function sinatra_browse_recordings() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$recording_query = db_query('SELECT * FROM `sinatra_session_recording`')->fetchAll();
+	$session_query = db_query('SELECT * FROM `sinatra_session`')->fetchAllAssoc('session_id');
+	
+	$sort_array = array();
+	foreach( $recording_query as $rec ) {
+		$sort_array[] = array($rec->recording_id, get_recording_name($rec->recording_id), $session_query[$rec->session_id]->date, $rec->session_position, $session_query[$rec->session_id]->date_display, get_recording_type($rec->recording_id));
+	}
+	uasort ($sort_array, "sort_recording");
+
+	foreach( $sort_array as $rec ) {
+		if( $rec[0] > 638 )
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a> <span style="color:blue">new!</span></li>';
+		else
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a></li>';
+
+	}
+	
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sinatra_browse_songs() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT song_id, title FROM `sinatra_song`')->fetchAll();
+	
+	$sort_array = array();
+	foreach( $query as $song ) {
+		$sort_array[] = array($song->song_id,$song->title);
+	}
+	uasort ($sort_array, "sort_name");
+
+	foreach( $sort_array as $song ) {
+		if( $song[0] > 481 )
+			$output .= '<li><a href="' . $base_url . '/song/' . $song[0] . '">' . $song[1] . '</a> <span style="color:blue">new!</span></li>';
+		else
+			$output .= '<li><a href="' . $base_url . '/song/' . $song[0] . '">' . $song[1] . '</a></li>';
+	}
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sinatra_browse_people() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT person_id, first_name, surname FROM `sinatra_person`')->fetchAll();
+	
+	$sort_array = array();
+	foreach( $query as $people ) {
+		$sort_array[] = array($people->person_id,$people->first_name,$people->surname);
+	}
+	uasort ($sort_array, "sort_people");
+
+	foreach( $sort_array as $person ) {
+		if( $person[0] > 1268 )
+			$output .= '<li><a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a> <span style="color:blue">new!</span></li>';
+		else
+			$output .= '<li><a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a></li>';
+	}
+	
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sinatra_browse_albums() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT album_id, title, date FROM `sinatra_album`')->fetchAll();
+	
+	$sort_array = array();
+	foreach( $query as $album ) {
+		$sort_array[] = array($album->album_id,$album->title,$album->date);
+	}
+	uasort ($sort_array, "sort_albums");
+
+	foreach( $sort_array as $album ) {
+		if( $album[0] > 54 )
+			$output .= '<li><a href="' . $base_url . '/album/' . $album[0] . '">' . $album[1] . ' (' . $album[2] .')</a> <span style="color:blue">new!</span></li>';
+		else
+			$output .= '<li><a href="' . $base_url . '/album/' . $album[0] . '">' . $album[1] . ' (' . $album[2] .')</a></li>';
+	}
+
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sinatra_browse_concerts() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT concert_id, location, date_display, date FROM `sinatra_concert`')->fetchAll();
+	
+	foreach( $query as $concert ) {
+		$sort_array[] = array($concert->concert_id,$concert->location,$concert->date_display, $concert->date);
+	}
+	uasort ($sort_array, "sort_concerts");
+
+	foreach( $sort_array as $concert ) {
+		if( $concert[0] > 6 )
+			$output .= '<li><a href="' . $base_url . '/concert/' . $concert[0] . '">' . $concert[1] . ' - ' . $concert[2] .'</a> <span style="color:blue">new!</span></li>';
+		else
+			$output .= '<li><a href="' . $base_url . '/concert/' . $concert[0] . '">' . $concert[1] . ' - ' . $concert[2] .'</a></li>';
+	}
+	
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sinatra_browse_radio() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT radio_id, series, episode, date_display, date FROM `sinatra_radio`')->fetchAll();
+	
+	foreach( $query as $radio ) {
+		$sort_array[] = array($radio->radio_id,$radio->series,$radio->episode,$radio->date, $radio->date_display);
+	}
+	uasort ($sort_array, "sort_episode");
+
+	foreach( $sort_array as $radio ) {
+		if( $radio[0] > 22 )
+			$output .= '<li><a href="' . $base_url . '/radio/' . $radio[0] . '"><i>' . $radio[1] . '</i> #' . $radio[2] . ' - ' . $radio[4] .'</a> <span style="color:blue">new!</span></li>';
+		else
+			$output .= '<li><a href="' . $base_url . '/radio/' . $radio[0] . '"><i>' . $radio[1] . '</i> #' . $radio[2] . ' - ' . $radio[4] .'</a></li>';
+	}		
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sinatra_browse_television() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT television_id, series, episode, date_display, date FROM `sinatra_television`')->fetchAll();
+	if( count($query) > 0 ) {
+		foreach( $query as $television ) {
+			$sort_array[] = array($television->television_id,$television->series,$television->episode,$television->date, $television->date_display);
+		}
+		uasort ($sort_array, "sort_episode");
+
+		foreach( $sort_array as $television ) {
+			
+			$output .= '<li><a href="' . $base_url . '/television/' . $television[0] . '"><i>' . $television[1] . '</i>';
+					
+			if( $television[2] != null ) 
+				$output .= '#' . $television[2];
+
+			$output .= ' - ' . $television[4] . '</a>';
+			
+			if( $television[0] > 1 )
+				$output .= '<span style="color:blue">new!</span></li>';
+			
+			$output .= '</li>';
+		}
+	}
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sinatra_browse_film() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT film_id, title, date_display, date FROM `sinatra_film`')->fetchAll();
+	if( count($query) > 0 ) {
+		foreach( $query as $film ) {
+			$sort_array[] = array($film->film_id,$film->title,$film->date_display, $film->date);
+		}
+		uasort ($sort_array, "sort_name");
+
+		foreach( $sort_array as $film ) {
+			if( $film[0] > 1 )
+				$output .= '<li><a href="' . $base_url . '/film/' . $film[0] . '"><i>' . $film[1] . '</i> (' . $film[2] .')</a> <span style="color:blue">new!</span></li>';
+			else
+				$output .= '<li><a href="' . $base_url . '/film/' . $film[0] . '"><i>' . $film[1] . '</i> (' . $film[2] .')</a></li>';
+		}
+	}	
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function sort_recording($a, $b) {
+	
+	$date_a = $a[2];
+	$date_b = $b[2];
+	
+	if( $date_a > $date_b )
+		return 1;
+	if( $date_a < $date_b )
+		return -1;
+	
+	$order_a = $a[3];
+	$order_b = $b[3];
+	
+	if( $order_a > $order_b ) 
+		return 1;
+	if( $order_a < $order_b )
+		return -1;
+	
+	return 0;
+}
+function sort_name($a, $b) {
+	
+	$name_a = $a[1];
+	$name_b = $b[1];
+	
+	if( $name_a > $name_b )
+		return 1;
+	if( $name_a < $name_b )
+		return -1;
+	
+	return 0;
+}
+function sort_name_array($a, $b) {
+	$name_a = $a[0][1];
+	$name_b = $b[0][1];
+	
+	if( $name_a > $name_b )
+		return 1;
+	if( $name_a < $name_b )
+		return -1;
+	
+	return 0;
+}
+function sort_people($a, $b) {
+	
+	$surname_a = $a[2];
+	$surname_b = $b[2];
+	
+	if( $surname_a > $surname_b ) 
+		return 1;
+	if( $surname_a < $surname_b )
+		return -1;
+	
+	$name_a = $a[1];
+	$name_b = $b[1];
+	
+	if( $name_a > $name_b )
+		return 1;
+	if( $name_a < $name_b )
+		return -1;
+	
+	return 0;
+}
+
+function sort_albums($a, $b) {
+	
+	$title_a = $a[1];
+	$title_b = $b[1];
+	
+	if( $title_a > $title_b ) 
+		return 1;
+	if( $title_a < $title_b )
+		return -1;
+	
+	return 0;
+}
+
+function sort_concerts($a, $b) {
+	
+	$date_a = $a[3];
+	$date_b = $b[3];
+	
+	if( $date_a > $date_b ) 
+		return 1;
+	if( $date_a < $date_b )
+		return -1;
+	
+	return 0;
+}
+
+function sort_episode($a, $b) {
+	
+	$series_a = $a[1];
+	$series_b = $b[1];
+	
+	if( $series_a > $series_b ) 
+		return 1;
+	if( $series_a < $series_b )
+		return -1;
+	
+	$episode_a = $a[2];
+	$episode_b = $b[2];
+	
+	if( $episode_a > $episode_b )
+		return 1;
+	if( $episode_a < $episode_b )
+		return -1;
+	
+	return 0;
+}
+
+
+function sort_radio_personnel($a, $b) {
+		
+	$order = array('Star', 'With', 'Guest star', 'Vocal group', 'Vocal director', 'Band leader', 'Orchestra', 'Announcer', 'Trumpet');
+	
+	$pos_a = array_search($a, $order);
+	$pos_b = array_search($b, $order);
+	
+	if( $pos_a > $pos_b )
+		return 1;
+	if( $pos_a < $pos_b )
+		return -1;
+	return 0;
+}

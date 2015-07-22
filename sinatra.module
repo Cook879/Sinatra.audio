@@ -371,7 +371,7 @@ function sinatra_view_recording ($id) {
      </div>';
 	 }
 
-	 if( $user->uid > 0 ) 
+	// if( $user->uid > 0 ) 
 		$output .= sinatra_view_recording_listen($id);
 	 
 	 $output .= '
@@ -871,7 +871,7 @@ function sinatra_view_album ($id) {
 	
 	$output .= '</ol>';
 	
-	if( $album_query['youtube'] != null && $user->uid > 0 )
+	if( $album_query['youtube'] != null /*&& $user->uid > 0*/ )
 		$output .= '<h3>Listen</h3><iframe width="560" height="315" src="https://www.youtube.com/embed/videoseries?list=' . $album_query['youtube'] . '" frameborder="0" allowfullscreen></iframe>';
 	
 	if( $album_query['notes'] != null )
@@ -922,7 +922,7 @@ function sinatra_view_concert ($id) {
 	
 		$output .= '</ol>';
 		
-		if( $concert_query['source'] != null && $user->uid > 0)
+		if( $concert_query['source'] != null /*&& $user->uid > 0*/)
 			$output .= '<h3>Listen</h3><iframe class="listen" width="420" height="315" src="//www.youtube.com/embed/' . $concert_query['source'] . '" frameborder="0" allowfullscreen></iframe>';
 				
 		if( $concert_query['notes'] != null )
@@ -1033,7 +1033,7 @@ function sinatra_view_radio ($id) {
 			$output .= '</table>';
 		}
 		
-		if( $radio_query['youtube'] != null && $user->uid > 0 )
+		if( $radio_query['youtube'] != null /* && $user->uid > 0 */)
 			$output .= '<h3>Listen</h3><iframe class="listen" width="420" height="315" src="//www.youtube.com/embed/' . $radio_query['youtube'] . '" frameborder="0" allowfullscreen></iframe>';
 		
 		if( $radio_query['script'] != null ) 
@@ -1343,9 +1343,9 @@ function sinatra_view_person ($id) {
 			
 		}	
 		
-		if( $person_query['notes'] != null || $person_query['wikipedia'] != null )
+		if( $person_query['notes'] != null || ($person_query['wikipedia'] != null && $person_query['wikipedia'] != ' ') )
 			$output .= '<h3>Notes</h3><p>' . $person_query['notes'] . '</p>';
-		if( $person_query['wikipedia'] != null )
+		if( $person_query['wikipedia'] != null && $person_query['wikipedia'] != ' ' )
 			$output .= '<p><a href="http://en.wikipedia.org/wiki/' . $person_query['wikipedia'] . '">Wikipedia page</a></p>';
 		return $output;
 	}

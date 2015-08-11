@@ -1865,28 +1865,96 @@ function sinatra_browse() {
 
 function sinatra_browse_recordings() {
 	global $base_url;
+	drupal_add_js(drupal_get_path('module', 'sinatra') .'/sinatra.js');
+
 	
-	$output = '<div class="browse"><ul>';
 	$recording_query = db_query('SELECT * FROM `sinatra_session_recording`')->fetchAll();
 	$session_query = db_query('SELECT * FROM `sinatra_session`')->fetchAllAssoc('session_id');
 	
+	// Create select boxes
+	$query = db_query('SELECT song_id, title FROM `sinatra_song`')->fetchAll();
+	
+	$sort_array = array();
+	foreach( $query as $song ) {
+		$sort_array[] = array($song->song_id,$song->title);
+	}
+	uasort ($sort_array, "sort_name");
+	
+	$output = '<select id="browse_recordings_select_song" onchange="browse_recordings_select()">';
+	$output .= '<option value="0"> Any song</option>';
+	foreach( $sort_array as $song ) {
+		$output .= '<option value="' . $song[0] . '">' . $song[1] . '</option>';
+	}
+	$output .= '</select>';
+	
+	// Hardcoding is bad
+	$type_array = ['Demo', 'Studio','Alternate take','Radio', 'Edit', 'Live', 'Television', 'Film', 'Session material'];
+	
+	$output .= '<select id="browse_recordings_select_type" onchange="browse_recordings_select()">';
+	$output .= '<option value="all"> Any type</option>';
+	foreach( $type_array as $type ) {
+		$type_html = str_replace(' ', '_', strtolower($type));
+		$output .= '<option value="' . $type_html . '">' . $type . '</option>';
+	}
+	$output .= '</select>';
+
+	$year_array = array();
+	$year = 1939;
+	while( $year < 1996 ) {
+		$year_array[] = $year;
+		$year++;
+	}
+	
+	$output .= '<select id="browse_recordings_select_date" onchange="browse_recordings_select()">';
+	$output .= '<option value="0">Any year</option>';
+	foreach( $year_array as $year ) {
+		$output .= '<option value="' . $year . '">' . $year . '</option>';
+	}
+	$output .= '</select>';
+	
+	$output .= '<button onclick="clearFilters()">Clear filters</button>';
+	$output .= '<div class="browse"><ul>';
+
 	$sort_array = array();
 	foreach( $recording_query as $rec ) {
-		$sort_array[] = array($rec->recording_id, get_recording_name($rec->recording_id), $session_query[$rec->session_id]->date, $rec->session_position, $session_query[$rec->session_id]->date_display, get_recording_type($rec->recording_id));
+		$recording_name = get_recording_name($rec->recording_id);
+		$sort_array[] = array($rec->recording_id, $recording_name, $session_query[$rec->session_id]->date, $rec->session_position, $session_query[$rec->session_id]->date_display, get_recording_type($rec->recording_id));
 	}
+	
 	uasort ($sort_array, "sort_recording");
-
+	
 	foreach( $sort_array as $rec ) {
 		if( $rec[0] > 638 )
-			$output .= '<li><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a> <span style="color:blue">new!</span></li>';
+			$output .= '<li class="' . create_browse_class($rec[0], $rec[5], $rec[2]) . '"><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a> <span style="color:blue">new!</span></li>';
 		else
-			$output .= '<li><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a></li>';
-
+			$output .= '<li class="' . create_browse_class($rec[0], $rec[5], $rec[2]) . '"><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a></li>';
 	}
 	
 	$output .= '</ul></div>';
 	return $output;
 }
+
+function create_browse_class($id, $type, $date) {
+	$recording_query = db_query('SELECT * FROM `sinatra_recording_song` WHERE recording_id = :id ORDER BY medley_position',
+								array(
+									':id' => $id,
+								))->fetchAll();
+								
+	$type = str_replace(' ', '_', strtolower($type));
+		
+	$class = 'browse_recording';	
+		
+	foreach ( $recording_query as $record ) {
+		$class = $class . ' browse_recording_song_' . $record->song_id;
+	}
+	
+	$class = $class . ' browse_recording_type_' . $type;
+	
+	$class = $class . ' browse_recording_date_' . substr($date, 0, 4);
+						
+	return $class;
+}
+
 
 function sinatra_browse_songs() {
 	global $base_url;

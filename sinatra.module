@@ -1072,7 +1072,9 @@ function sinatra_view_television ($id) {
 
 		$output = '<table class="infobox">';
 		$output .= '<tr><td class="table_title">Network</td><td class="table_contents">' . $television_query['network'] . '</td></tr>';
-		
+		if( $television_query['wikipedia'] != null ) 
+			$output .= '<tr><td colspan="2" align="center"><a href="http://en.wikipedia.org/wiki/' . $television_query['wikipedia'] . '">Wikipedia</a></td></tr>';
+
 		$output .= '</table>';
 		
 		$output .= '<h3>Tracklist</h3>';
@@ -1144,6 +1146,8 @@ function sinatra_view_film ($id) {
 		$output = '<table class="infobox">';
 		$output .= '<tr><td class="table_title">Studio</td><td class="table_contents">' . $film_query['studio'] . '</td></tr>';
 		$output .= '<tr><td class="table_title">Released</td><td class="table_contents">' . $film_query['date_display'] . '</td></tr>';
+		if( $film_query['wikipedia'] != null ) 
+			$output .= '<tr><td colspan="2" align="center"><a href="http://en.wikipedia.org/wiki/' . $film_query['wikipedia'] . '">Wikipedia</a></td></tr>';
 		
 		$output .= '</table>';
 		

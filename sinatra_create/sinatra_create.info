@@ -1,0 +1,5 @@
+name = Sinatra Create
+description = ''
+core = 7.x
+dependencies[] = sinatra
+package = Sinatra

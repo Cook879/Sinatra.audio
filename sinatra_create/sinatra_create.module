@@ -1,0 +1,131 @@
+<?php
+/**
+ * @file
+ * Allows users to create their own wishlists called "boards".
+ */
+  
+/**
+ * Implements hook_menu()
+ */
+function sinatra_create_menu() {
+ 
+	$items = array(
+		'create/recording' => array(
+			'title' => 'Create new recording',
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array('sinatra_create_form'),
+			'access callback' => TRUE,
+		),
+	);
+	return $items;
+}
+
+function sinatra_create_form($form, &$form_state) {
+	global $user;
+	
+	$song_query = db_query('SELECT title FROM `sinatra_song`'	)->fetchCol();
+	
+	$form['song'] = array(
+		'#type' => 'select',
+		'#title' => 'Song',
+		'#options' => $song_query,
+		'#required' => TRUE,
+	);
+	
+	$form['artist'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Artist',
+		'#required' => TRUE,
+	);	
+	
+	$form['date'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Date YYYY-MM-DD',
+		'#required' => TRUE,
+	);	
+
+	$form['date_display'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Date display',
+		'#required' => TRUE,
+	);	
+	
+	$form['type'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Type',
+		'#required' => TRUE,
+	);	
+	
+	$project_query = db_query('SELECT title FROM `sinatra_album`'	)->fetchCol();
+
+	$form['album'] = array(
+		'#type' => 'select',
+		'#title' => 'Album',
+		'#options' => $project_query,
+		'#required' => TRUE,
+	);		
+
+	$form['length'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Length',
+		'#required' => FALSE,
+	);		
+	
+	$form['notes'] = array(
+		'#type' => 'textarea',
+		'#title' => 'Notes',
+		'#required' => FALSE,
+	);		
+
+	/*$role_query = db_query('SELECT name FROM `sinatra_role`')->fetchCol();
+	$fname_query = db_query('SELECT first_name FROM `sinatra_person`')->fetchCol();
+	$sname_query = db_query('SELECT surname FROM `sinatra_person`')->fetchCol();
+	$people_query = array_merge ($fname_query, $sname_query);
+	
+	for( $i = 0; $i < 20; $i++ ) {
+		$form['role' + $i] = array(
+			'#type' => 'select',
+			'#title' => 'Role',
+			'#options' => $role_query,
+			'#required' => TRUE,
+		);	
+		
+		$form['person' + $i] = array(
+			'#type' => 'select',
+			'#title' => 'Person',
+			'#options' => $people_query,
+			'#required' => TRUE,
+		);	
+		
+		$form['notes' + $i] = array(
+			'#type' => 'textfield',
+			'#title' => 'Notes',
+			'#required' => TRUE,
+		);	
+	}*/
+	
+	$form['submit_button'] = array(
+		'#type' => 'submit',
+		'#value' => t('Create'),
+        '#submit' => array('create_board_form_submit'),
+	);
+	return $form;
+}
+
+function create_board_form_submit($form, &$form_state) {
+
+	/*db_insert('sinatra_recording')
+		->fields( array( 
+			// recording_id is AUTO_INCREMENT
+			'song_id' => $form['song']['#value']+1,
+			'artist_display' => $form['artist']['#value'],
+			'date' => $form['date']['#value'],
+			'date_display' => $form['date_display']['#value'],
+			'type' => $form['type']['#value'],
+			'project_id' => $form['project']['#value']+1,
+			'length' => $form['length']['#value'],
+			'notes' => $form['notes']['#value'],
+		))
+		->execute();*/
+		
+}	

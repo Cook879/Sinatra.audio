@@ -307,6 +307,9 @@ function sinatra_view_recording ($id) {
 		// Type
 		$output .= '<tr><td class="table_title">Type</td><td class="table_contents">' . $recording_query['type'] . '</td></tr>';
 		
+		// Location
+		$output.= get_location($recording_id);
+		
 		// album
 		$count = count($project_query);
 		if( $count > 0 ) {
@@ -2247,4 +2250,61 @@ function sort_radio_personnel($a, $b) {
 	if( $pos_a < $pos_b )
 		return -1;
 	return 0;
+}
+
+function get_location($recording_id){
+
+	global $base_url;
+	$session_id=db_query('SELECT session_id FROM `sinatra_session_recording` WHERE recording_id=:recording_id', 
+					array(
+						':recording_id' => $recording_id,
+					))->fetchField();
+					
+	$location_id=db_query('SELECT location_id FROM `sinatra_session` WHERE session_id=:session_id',
+					array(
+						':session_id' => $session_id,
+					))->fetchField();
+	$location_printout = "";	
+	
+	if (isset($location_id)){
+		$location=get_location_info($location_id);
+		//generates the output string - due to various (16) different combinations, instead check whether that piece of data is there and, if so, whether one of the following pieces of data is there.
+		if (isset($location['venue_name'])){
+			$location_printout .= $location['venue_name'];
+			if(isset($location['city']) or isset($location['state']) or isset($location['country'])){
+				$location_printout .= ', ';
+			}
+		}
+		if (isset($location['city'])){
+			$location_printout .= $location['city'];
+			if(isset($location['state']) or isset($location['country'])){
+				$location_printout .= ', ';
+			}
+		}
+		if (isset($location['state'])){
+			$location_printout .= $location['state'];
+			if(isset($location['country'])){
+				$location_printout .= ', ';
+			}
+		}
+		if (isset($location['country'])){
+			$location_printout .= $location['country'];
+		}
+		
+	
+		$output = '<tr><td class = "table_title">Recorded at</td><td class="table_contents">' . $location_printout . '</td></tr>';
+	}
+	else{
+		return '';
+	}
+	
+	return $output;
+}
+
+function get_location_info($id) {
+	$location_query = db_query('SELECT * FROM `sinatra_location` WHERE location_id = :id',
+					array(
+						':id' => $id,
+					))->fetchAssoc();
+	return $location_query;
 }

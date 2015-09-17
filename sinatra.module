@@ -353,6 +353,14 @@ function sinatra_view_recording ($id) {
 		if( $recording_query['length'] != null )
 			$output .= '<tr><td class="table_title">Length</td><td class="table_contents">' . $recording_query['length'] . '</td></tr>';
 		
+		//Matrix number
+		if ( $recording_query['matrix_number'] != null)
+			$output .= '<tr><td class="table_title">Matrix number</td><td class="table_contents">' . $recording_query['matrix_number'] . '</td></tr>';
+		
+		//Take number
+		if ( $recording_query['take_number'] != null)
+			$output .= '<tr><td class="table_title">Take number</td><td class="table_contents">' . $recording_query['take_number'] . '</td></tr>';
+		
 		$output .= '</table>';
 		
 		// End rec-col-left

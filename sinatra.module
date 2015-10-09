@@ -55,6 +55,12 @@ function sinatra_menu() {
 			'page arguments' => array(1),
 			'access callback' => TRUE,
 		),
+		'location/%' => array(
+			'title' => 'Viewing location',
+			'page callback' => 'sinatra_view_location',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
 		'random' => array(
 			'title' => 'Random',
 			'page callback' => 'sinatra_random',
@@ -1412,11 +1418,16 @@ function get_recording_name($id) {
 								))->fetchAll();
 		
 	$song_ids = array(count($recording_query));
-		
+
+	//new bool variable to check if parody
+	$parody = 0;
+	
 	$i = 0;
 	foreach ( $recording_query as $record ) {
 		$song_ids[$i] = $record->song_id;
 		$i++;
+		if ($record->parody == 1)
+			$parody = 1;
 	}
 						
 	$song_query = db_query('SELECT title FROM `sinatra_song` WHERE song_id IN (:id)',
@@ -1425,7 +1436,7 @@ function get_recording_name($id) {
 								))->fetchAll();
 	$song_title = create_song_title($song_query);
 	
-	if( $record->parody == 1 )
+	if( $parody == 1 )
 		return $song_title . ' (parody)';
 	return $song_title;
 }
@@ -1874,6 +1885,9 @@ function sinatra_browse() {
 	$output .= '<div class="tabbertab"><h2>Film</h2>
 	 '	. sinatra_browse_film() . '
 	 </div>';
+	 $output .= '<div class="tabbertab"><h2>Location</h2>
+	 ' . sinatra_browse_location() . '
+	 </div>';
 	$output .= '</div>';
 	return $output;
 }
@@ -2272,34 +2286,9 @@ function get_location($recording_id){
 					array(
 						':session_id' => $session_id,
 					))->fetchField();
-	$location_printout = "";	
 	
 	if (isset($location_id)){
-		$location=get_location_info($location_id);
-		//generates the output string - due to various (16) different combinations, instead check whether that piece of data is there and, if so, whether one of the following pieces of data is there.
-		if (isset($location['venue_name'])){
-			$location_printout .= $location['venue_name'];
-			if(isset($location['city']) or isset($location['state']) or isset($location['country'])){
-				$location_printout .= ', ';
-			}
-		}
-		if (isset($location['city'])){
-			$location_printout .= $location['city'];
-			if(isset($location['state']) or isset($location['country'])){
-				$location_printout .= ', ';
-			}
-		}
-		if (isset($location['state'])){
-			$location_printout .= $location['state'];
-			if(isset($location['country'])){
-				$location_printout .= ', ';
-			}
-		}
-		if (isset($location['country'])){
-			$location_printout .= $location['country'];
-		}
-		
-	
+		$location_printout = create_location_string($location_id, null);
 		$output = '<tr><td class = "table_title">Recorded at</td><td class="table_contents">' . $location_printout . '</td></tr>';
 	}
 	else{
@@ -2316,3 +2305,544 @@ function get_location_info($id) {
 					))->fetchAssoc();
 	return $location_query;
 }
+
+function sinatra_view_location ($id) {
+	global $base_url;
+
+	// Check the location exists
+	$location_id = db_query('SELECT location_id FROM `sinatra_location` WHERE location_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	
+	if( $location_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+		//return '<p>Error - person does not exist.</p>';
+	else {	
+		
+		// Get the full details of the location
+		$location_query = get_location_info($id);
+				
+
+		//Get type of venue
+		/*An explanation as to how the "type" column of the table works follows. S is a state, CI a city and CO a country. Anything else will be treated as a venue. This is needed to distinguish "types" of location. */
+		$type = get_location_type($location_query);
+		$output = '';			
+		// TITLE and add location info
+		switch ($type){
+			case "room":
+				$location_details = create_location_string($id, "room");
+				$title = $location_query['room'] . ', ' . $location_query['venue_name'];
+				break;
+			
+			case "venue":
+				$location_details = create_location_string($id, "venue");
+				$title = $location_query['venue_name'];
+				break;
+				
+			case "city":
+				$location_details = create_location_string($id, "city");
+				$title = $location_query['city'];
+				break;
+				
+			case "state":
+				$location_details = create_location_string($id, "state");
+				$title = $location_query['state'];
+
+				break;
+			case "country":
+				$location_details = create_location_string($id, "country");
+				$title = $location_query['country'];
+
+				break;
+			default: /*should be impossible to get this far, but just in case */
+				$location_details = 'An error has occured';
+		}
+		drupal_set_title($title);
+		$output .= '<h3>' . $location_details . '</h3>';
+
+		//show sessions
+		
+		if ($type == "room"){
+			$output .= '<h3>Sessions</h3>';
+			$output .= getSessionsByRoom($id);
+		}
+		
+		if ($type == "venue"){
+			$output .= '<h3>Sessions</h3>';
+			//$output .= '<ul>';
+			$output .= getSessionsByVenue($id, $location_query['venue_name'], FALSE);
+			//$output .= '</ul>';
+		}
+		
+		if ($type == "city"){
+			//get venues
+			$output .= getSessionsByCity($id, $location_query['city']);
+
+		}
+		
+		if ($type == "state"){
+			$output .= getSessionsByState($id, $location_query['state']);
+		}
+		
+		if ($type == "country"){
+			$output .= getSessionsByCountry($id, $location_query['country']);
+		}
+		
+		//end of func
+		return $output;
+	}
+}
+
+function getSessionsByRoom($id){
+	global $base_url;
+	
+	$output = "";
+	$session_query = db_query('SELECT session_id, date_display FROM `sinatra_session` WHERE location_id = :id',
+					array(
+						':id' => $id,
+					))->fetchAll();
+	if(empty($session_query)){
+		return $output;
+	}
+	else{
+		$sort_array = array();
+		foreach($session_query as $session) {
+			$sort_array[] = array($session->session_id, $session->date_display);
+		}
+		
+		foreach($sort_array as $session){
+			//currently, no session pages, so remove links.
+			//$output .= '<li><a href= "' . $base_url . '/session/' . $session[0] . '">' . $session[1] . '</a></li>'; 
+			$output .= '<li>' . $session[1] . '</li>';
+		}
+		return $output;		
+	}
+}
+
+function getSessionsByVenue($id, $vn, $overwrite){ /*Annoying extra bool varialb $overwrite because of recursive stuff causing dual headings*/
+	/*This code is a bit of a mess, because adding rooms meant me having to add a new base level function.*/
+	global $base_url;
+
+	$output = "";
+	
+	$venue_query = db_query('SELECT location_id, venue_name, room FROM `sinatra_location` WHERE venue_name = :name AND location_id != :id',
+					array(
+						':id' => $id,
+						':name' => $vn,
+						))->fetchAll();
+							
+	if(empty($venue_query)){
+		$getLocSes = getSessionsByRoom($id);
+		if(empty($getLocSes)){
+			return $output;
+		}
+		else{
+			$output .= '<ul>';
+			if($overwrite = FALSE){
+				$output .= '<h3>Sessions at ' . $vn . '</h3>';
+			}
+			
+			$output .= getSessionsByRoom($id);
+			
+			$output .= '</ul>';		
+			return $output;
+		}					
+	}
+	else{
+		$output .= '<h3>Rooms in ' . $vn . '</h3>';
+		$output .= '<ul>';
+		/*add sort at some point*/
+		$sort_array2 = array();
+		foreach($venue_query as $venue){
+			$sort_array2[] = array($venue->location_id, $venue->venue_name, $venue->room);
+		}
+		//print out rooms
+		foreach($sort_array2 as $venue) {
+				$output .= '<li><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[2] . '</a></li>';
+		}
+		$output .='</ul>';
+		
+		//get sessions too
+		$output .= '<ul>';
+		$output .= '<h3>Sessions at ' . $vn . '</h3>';
+		
+		$output .= '<ul>';
+		foreach($sort_array2 as $venue){
+			$output .= '<li><h3>Sessions in <a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[2] . '</a></h3></li>';
+			$output .= getSessionsByRoom($venue[0]);
+		}
+		$output .= '</ul>';
+		$output .= '</ul>';
+		$getLocSes = getSessionsByRoom($id);
+		if(empty($getLocSes)){
+			return $output;
+		}
+		else{
+			$output .= '<ul>';
+			$output .= '<h3>Other sessions in ' . $vn . '</h3>';
+			$output .= getSessionsByRoom($id);
+			
+			$output .= '</ul>';		
+			return $output;
+		}
+	}					
+}
+
+function getSessionsByCity($id, $city){
+	global $base_url;
+	
+	$output = '';
+	
+	$venue_query = db_query('SELECT location_id, venue_name, room FROM `sinatra_location` WHERE city = :name AND location_id != :id AND room IS NULL',
+					array(
+						':id' => $id,
+						':name' => $city,
+						))->fetchAll();
+						
+	if(empty($venue_query)){
+		$getCitSes = getSessionsByVenue($id, $city, FALSE);
+		if(empty($getCitSes)){
+			return $output;
+		}
+		else{
+			$output .= '<h3>Sessions in ' . $city . '</h3>';
+			$output .= $getCitSes;
+		
+			$output .= '</ul>';
+		
+			return $output;
+		}
+	}
+	/*add sort at some point*/
+	else{
+		$output .= '<h3>Studios in ' . $city . '</h3>';
+		$output .= '<ul>';
+		$sort_array2 = array();
+		foreach($venue_query as $venue){
+			$sort_array2[] = array($venue->location_id, $venue->venue_name);
+		}
+		//print out venues
+		foreach($sort_array2 as $venue) {
+			$output .= '<li><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[1] . '</a></li>';
+		}
+		$output .='</ul>';
+		
+		//get sessions too
+		$output .= '<h3>Sessions in ' . $city . '</h3>';
+		
+		$output .= '<ul>';
+		foreach($sort_array2 as $venue){
+			$output .= '<li><h3><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[1] . '</a></h3></li>';
+			$output .= getSessionsByVenue($venue[0], $venue[1], FALSE);
+		}
+			
+		$getCitSes = getSessionsByVenue($id, $city, TRUE);
+		if(empty($getCitSes)){
+			return $output;
+		}
+		else{
+			$output .= '<h3>Other sessions in ' . $city . '</h3>';
+			$output .= $getCitSes;
+		
+			$output .= '</ul>';
+		
+			return $output;
+		}
+	}		
+}
+
+function getSessionsByState($id, $state){
+	global $base_url;
+	$output = '';	
+	
+
+	//get cities
+	$city_query = db_query('SELECT location_id, venue_name, city FROM `sinatra_location` WHERE state = :name AND location_id != :id AND venue_name IS NULL',
+			array(
+				':id' => $id,
+				':name' => $state,
+				))->fetchAll();
+	/*add sort at some point*/
+	
+	if (empty($city_query)){
+		$getStaSes = getSessionsByVenue($id, $state, TRUE);
+		
+		if(empty($getStaSes)){
+			return $output;
+		}
+		else{
+			$output .= '<ul>';
+			$output .= '<h3>Sessions in ' . $state . '</h3>';
+			$output .= getSessionsByVenue($id, $state, TRUE);
+			$output .= '</ul>';
+			
+			return $output;
+		}
+		
+	}
+	else{
+		$output .= '<h3>Cities in ' . $state . '</h3>';
+		$output .= '<ul>';
+		$sort_array3 = array();
+		foreach($city_query as $city){
+			$sort_array3[] = array($city->location_id, $city->city);
+		}
+		//print out cities
+		foreach($sort_array3 as $city){
+			
+			$output .= '<li><a href="' . $base_url . '/location/' . $city[0] . '">' . $city[1] . '</a></li>';
+		}
+		$output .= '</ul>';
+		
+		$output .= '<ul>';
+		foreach($sort_array3 as $city){
+		//for each city, go get a list of venues and then get a list of sessions by venue. 
+			$output .= '<li><h3>' . $city[1] . '</h3></li>';
+			$output .= getSessionsByCity($city[0], $city[1]);
+		}
+		$output .= '</ul>';
+		
+		$getStaSes = getSessionsByVenue($id, $state, TRUE);
+		
+		if(empty($getStaSes)){
+			return $output;
+		}
+		else{
+			$output .= '<ul>';
+			$output .= '<h3>Other sessions in ' . $state . '</h3>';
+			$output .= getSessionsByVenue($id, $state, TRUE);
+			$output .= '</ul>';
+			
+			return $output;
+		}
+	}
+}
+
+function getSessionsByCountry($id, $country){
+	global $base_url;
+	$output = '';	
+	
+
+	//get cities
+	$state_query = db_query('SELECT location_id, state FROM `sinatra_location` WHERE country = :name AND location_id != :id AND city IS NULL AND venue_name IS NULL',
+			array(
+				':id' => $id,
+				':name' => $country,
+				))->fetchAll();
+	/*add sort at some point*/
+	if(empty($state_query)){
+		$getCouSes = getSessionsByVenue($id, $country, TRUE);
+
+		if(empty($getCouSes)){
+			return $output;
+		}
+		else{
+			$output .= '<ul>';
+			$output .= '<h3>Sessions in ' . $country . '</h3>';
+			$output .= getSessionsByVenue($id, $country, TRUE);
+			$output .= '</ul>';
+		
+			return $output;
+		}
+	}
+	else{
+		$output .= '<h3>States in ' . $country . '</h3>';
+		$output .= '<ul>';
+		$sort_array4 = array();
+		foreach($state_query as $state){
+			$sort_array4[] = array($state->location_id, $state->state);
+		}
+		//print out states
+		foreach($sort_array4 as $state){
+			$output .= '<li><a href="' . $base_url . '/location/' . $state[0] . '">' . $state[1] . '</a></li>';
+		}
+		$output .= '</ul>';
+		
+		$output .= '<ul>';
+		foreach($sort_array4 as $state){
+		//for each state, go get a list of cities and then get a list venues in that city and then get a list of sessions by venue. 
+			$output .= '<li><h3>' . $state[1] . '</h3></li>';
+			$output .= getSessionsByState($state[0], $state[1]);
+		}
+		$output .= '</ul>';
+		
+		$getCouSes = getSessionsByVenue($id, $country, TRUE);
+
+		if(empty($getCouSes)){
+			return $output;
+		}
+		else{
+			$output .= '<ul>';
+			$output .= '<h3>Other sessions in ' . $country . '</h3>';
+			$output .= getSessionsByVenue($id, $country, TRUE);
+			$output .= '</ul>';
+		
+			return $output;
+		}
+	}
+}
+
+function sinatra_browse_location() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT location_id, venue_name FROM `sinatra_location`')->fetchAll();
+	
+	$sort_array = array();
+	foreach( $query as $location ) {
+		$sort_array[] = array($location->location_id, $location->venue_name);
+	}
+	uasort ($sort_array, "sort_name");
+
+	foreach( $sort_array as $location ) {
+		/*call funcn to get location details - in case no state/country etc..*/
+		$location_string = create_location_string($location[0], null);
+		/* commenting out, as during the first update all will be newif( $location[0] > 1268 )*/
+			$output .= '<li><a href="' . $base_url . '/location/' . $location[0] . '">' . $location_string . '</a> <span style="color:blue">new!</span></li>';
+		/*else
+			$output .= '<li><a href="' . $base_url . '/location/' . $location[0] . '">' . $location_string . '</a></li>';*/
+	}
+	
+	$output .= '</ul></div>';
+	return $output;
+}
+
+function create_location_string ($id, $ignore){
+
+	global $base_url;
+
+	$location=get_location_info($id);
+	$location_printout = "";	
+	//generates the output string - due to various (16) different combinations, instead check whether that piece of data is there and, if so, whether one of the following pieces of data is there.
+	//Now with extra complicatedness - if there is a thing set before it, then the venue/city/etc will have a different id, so need to find it! Else its the same as the one supplied $id.
+	//Oh, and ignore skips things, which is fairly self explanatory
+	if (isset($location['room']) AND $ignore != "room"){
+		$location_printout .= '<a href="' . $base_url . '/location/' . $id .'">' . $location['room'] . '</a>';
+		if(isset($location['venue']) or isset($location['city']) or isset($location['state']) or isset($location['country'])){
+			$location_printout .= ', ';
+		}
+	}
+	if (isset($location['venue_name']) AND $ignore != "venue"){
+		if(isset($location['room'])){
+			$venue_id = get_venue_link($location);
+		}
+		else{
+			$venue_id = $id;
+		}
+		$location_printout .= '<a href="' . $base_url . '/location/' . $venue_id . '">' . $location['venue_name'] . '</a>';
+		if(isset($location['city']) or isset($location['state']) or isset($location['country'])){
+			$location_printout .= ', ';
+		}
+	}
+	if (isset($location['city']) AND $ignore != "city"){
+		if(isset($location['room']) or isset($location['venue_name'])){
+			$venue_id = get_city_link($location);
+		}
+		else{
+			$venue_id = $id;
+		}
+		
+		$location_printout .= '<a href="' . $base_url . '/location/' . $venue_id . '">' . $location['city'] . '</a>';
+	
+		if(isset($location['state']) or isset($location['country'])){
+			$location_printout .= ', ';
+		}
+	}
+	
+	if (isset($location['state']) AND $ignore != "state"){
+		if(isset($location['room']) or isset($location['venue_name']) or isset($location['city'])){
+			$venue_id = get_state_link($location);
+		}
+		else{
+			$venue_id = $id;
+		}
+		
+		$location_printout .= '<a href="' . $base_url . '/location/' . $venue_id . '">' . $location['state'] . '</a>';
+	
+		if(isset($location['country'])){
+			$location_printout .= ', ';
+		}
+	}
+
+
+	
+	if (isset($location['country']) AND $ignore != "country"){
+		if(isset($location['room']) or isset($location['venue_name']) or isset($location['city']) or isset($location['state'])){
+			$venue_id = get_country_link($location);
+		}
+		else{
+			$venue_id = $id;
+		}
+		
+		$location_printout .= '<a href="' . $base_url . '/location/' . $venue_id . '">' . $location['country'] . '</a>';
+	
+	}
+	
+	return $location_printout;
+	
+}
+
+
+function sort_session_date($a, $b) {
+	$date_a = $a[1];
+	$date_b = $b[1];
+	
+	if( $date_a > $date_b ) 
+		return 1;
+	if( $date_a < $date_b )
+		return -1;
+	
+	return 0;
+}
+
+function get_location_type($location){	
+	if ($location['room'] == "" AND $location['venue_name'] == "" AND $location['city'] == "" AND $location['state'] == "" AND isset($location['country'])){
+		return "country";
+	}
+	else if ($location['room'] == "" AND $location['venue_name'] == "" AND $location['city'] == "" AND isset($location['state'])){
+		return "state";
+	}
+	else if ($location['room'] == "" AND $location['venue_name'] == "" AND isset($location['city'])){
+		return "city";
+	}
+	else if ($location['room'] == "" AND isset($location['venue_name'])){
+		return "venue";
+	}
+	else{
+		return "room";
+	}
+}
+
+function get_venue_link($location){
+	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE venue_name = :venue AND room IS NULL',
+		array(
+		':venue' => $location['venue_name'],
+		))->fetchField();
+	return $query;
+}
+
+function get_city_link($location){
+	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE city = :city AND room IS NULL AND venue_name IS NULL',
+		array(
+		':city' => $location['city'],
+		))->fetchField();
+	return $query;
+}
+
+function get_state_link($location){
+	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE state = :state AND room IS NULL AND venue_name IS NULL AND city IS NULL',
+		array(
+		':state' => $location['state'],
+		))->fetchField();
+	return $query;
+}
+function get_country_link($location){
+	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE country = :country AND room IS NULL AND venue_name IS NULL AND city IS NULL AND state IS NULL',
+		array(
+		':country' => $location['country'],
+		))->fetchField();
+	return $query;
+}
+

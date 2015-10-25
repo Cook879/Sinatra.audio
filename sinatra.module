@@ -61,6 +61,12 @@ function sinatra_menu() {
 			'page arguments' => array(1),
 			'access callback' => TRUE,
 		),
+		'session/%' => array(
+			'title' => 'Viewing session',
+			'page callback' => 'sinatra_view_session',
+			'page arguments' => array(1),
+			'access callback' => TRUE,
+		),
 		'random' => array(
 			'title' => 'Random',
 			'page callback' => 'sinatra_random',
@@ -315,6 +321,9 @@ function sinatra_view_recording ($id) {
 		
 		// Location
 		$output.= get_location($recording_id);
+		
+		// Session
+		$output .= get_Session($recording_id);
 		
 		// album
 		$count = count($project_query);
@@ -1888,6 +1897,9 @@ function sinatra_browse() {
 	 $output .= '<div class="tabbertab"><h2>Location</h2>
 	 ' . sinatra_browse_location() . '
 	 </div>';
+	 $output .= '<div class="tabbertab"><h2>Sessions</h2>
+	 ' . sinatra_browse_session() . '
+	 </div>';
 	$output .= '</div>';
 	return $output;
 }
@@ -2298,6 +2310,43 @@ function get_location($recording_id){
 	return $output;
 }
 
+function get_session($recording_id){
+	global $base_url;
+	$session_id=db_query('SELECT session_id FROM `sinatra_session_recording` WHERE recording_id=:recording_id',
+					array(
+						':recording_id' => $recording_id,
+						))->fetchField();
+	if (isset($session_id)){
+		$session = get_session_info($session_id);
+		$session_title = $session['date_display'];
+		$output = '<tr><td class = "table_title">Recorded on</td><td class="table_contents"><a href="' . $base_url . '/session/' . $session_id . '">' . $session_title . '</a></td></tr>';
+		return $output;
+	}
+	else{
+		return '';
+	}
+}
+
+function get_location_session($session_id) {
+	global $base_url;
+	
+	$location_id=db_query('SELECT location_id FROM `sinatra_session` WHERE session_id=:session_id',
+					array(
+						':session_id' => $session_id,
+					))->fetchField();
+	
+	if (isset($location_id)){
+		$location_printout = create_location_string($location_id, null);
+		$output = '<h3>Recorded at: ' . $location_printout . '</h3>';
+	}
+	else{
+		return '';
+	}
+	
+	return $output;
+	
+}
+
 function get_location_info($id) {
 	$location_query = db_query('SELECT * FROM `sinatra_location` WHERE location_id = :id',
 					array(
@@ -2322,11 +2371,9 @@ function sinatra_view_location ($id) {
 	else {	
 		
 		// Get the full details of the location
-		$location_query = get_location_info($id);
-				
+		$location_query = get_location_info($id);				
 
 		//Get type of venue
-		/*An explanation as to how the "type" column of the table works follows. S is a state, CI a city and CO a country. Anything else will be treated as a venue. This is needed to distinguish "types" of location. */
 		$type = get_location_type($location_query);
 		$output = '';			
 		// TITLE and add location info
@@ -2413,12 +2460,11 @@ function getSessionsByRoom($id){
 		}
 		
 		foreach($sort_array as $session){
-			//currently, no session pages, so remove links.
-			//$output .= '<li><a href= "' . $base_url . '/session/' . $session[0] . '">' . $session[1] . '</a></li>'; 
-			$output .= '<li>' . $session[1] . '</li>';
+			$output .= '<li><a href= "' . $base_url . '/session/' . $session[0] . '">' . $session[1] . '</a></li>'; 
+			//$output .= '<li>' . $session[1] . '</li>';
 		}
 		return $output;		
-	}
+	} 
 }
 
 function getSessionsByVenue($id, $vn, $overwrite){ /*Annoying extra bool varialb $overwrite because of recursive stuff causing dual headings*/
@@ -2846,3 +2892,108 @@ function get_country_link($location){
 	return $query;
 }
 
+function sinatra_view_session ($id) {
+	global $base_url;
+
+	// Check the session exists
+	$session_id = db_query('SELECT session_id FROM `sinatra_session` WHERE session_id = :id', 
+						array(
+							':id' => $id,
+						))->fetchField();
+						
+	
+	if( $session_id != $id ) 
+		drupal_goto('http://sinatra.audio/node/8');
+		//return '<p>Error - person does not exist.</p>';
+	else {	
+		
+		$session_query = get_session_info($id);
+		$output = "";
+		
+		$title = $session_query['date_display'];
+
+		
+		
+		drupal_set_title($title);
+		
+		$output .= get_location_session($id);
+		
+		$output .= '<h3>Recordings during this session</h3>';
+				
+		$output .= '<ul>';
+
+		$recording_list = db_query('SELECT * FROM `sinatra_session_recording` WHERE session_id = :id ORDER BY session_position',				
+				array(
+					':id' => $id,
+				))->fetchAll();
+		$recordings = array();
+		
+		foreach($recording_list as $rec){
+			$recordings[] = array($rec->recording_id);
+		}
+		//print_r($recordings);
+		foreach($recordings as $rec){
+			$recording_song_query = db_query('SELECT * FROM `sinatra_recording_song` WHERE sinatra_recording_song.recording_id = :id ORDER BY medley_position',
+								array(
+									':id' => $rec[0],
+								))->fetchAll();
+			$song_ids = array(count($recording_song_query));
+		
+			$i = 0;
+			foreach ( $recording_song_query as $record ) {
+				$song_ids[$i] = $record->song_id;
+				$i++;
+			}
+
+			$song_query_2 = db_query('SELECT * FROM `sinatra_song` WHERE song_id IN (:id)',
+								array(
+									':id' => $song_ids,
+								))->fetchAllAssoc('song_id');
+						
+
+			$song_query = array(count($recording_song_query));
+			$i = 0;
+			foreach( $recording_song_query as $record ) {
+				$song_query[$i] = $song_query_2[$record->song_id];
+				$i++;
+			}	
+			
+			$title = create_song_title($song_query);
+			$output .= '<li><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $title . '</a></li>';
+		}
+		//end of func
+		$output .= '</ul>';
+		return $output;
+	}
+}
+
+function get_session_info($id) {
+	$session_query = db_query('SELECT * FROM `sinatra_session` WHERE session_id = :id',
+					array(
+						':id' => $id,
+					))->fetchAssoc();
+	return $session_query;
+}
+
+function sinatra_browse_session() {
+	global $base_url;
+	
+	$output = '<div class="browse"><ul>';
+	$query = db_query('SELECT session_id, date_display FROM `sinatra_session`')->fetchAll();
+	
+	$sort_array = array();
+	foreach( $query as $session ) {
+		$sort_array[] = array($session->session_id, $session->date_display);
+	}
+	// sorrt later uasort ($sort_array, "sort_name");
+
+	foreach( $sort_array as $session ) {
+		/* commenting out, as during the first update all will be newif( $location[0] > 1268 )*/
+			$output .= '<li><a href="' . $base_url . '/session/' . $session[0] . '">' . $session[1] . '</a> <span style="color:blue">new!</span></li>';
+		/*else
+			$output .= '<li><a href="' . $base_url . '/location/' . $location[0] . '">' . $location_string . '</a></li>';*/
+	}
+	
+	$output .= '</ul></div>';
+	return $output;
+}

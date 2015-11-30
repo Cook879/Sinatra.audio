@@ -87,3 +87,84 @@ function clearFilters() {
 
 	browse_recordings_select();
 }
+
+function browse_songs_select() {
+	var songs = document.getElementsByClassName('browse_song');
+	
+	var e = document.getElementById("browse_songs_select_date");
+	var year = e.options[e.selectedIndex].value;
+	
+	var e2 = document.getElementById("browse_songs_select_letter");
+	var letter = e2.options[e2.selectedIndex].value;
+	
+	if (year == "0" && letter == "all") {
+		for (var i = 0; i < songs.length; i++) {
+			songs[i].style.display = 'list-item';
+		}
+	} else {
+		for (var i = 0; i < songs.length; i++) {
+			songs[i].style.display = 'none';
+		}
+	
+		var idToFind = '';
+		if( year != "0" ) {
+			idToFind = idToFind + 'browse_song_year_' + year + ' ';
+		}
+		if( letter != "all" ) {
+			idToFind = idToFind + 'browse_song_letter_' + letter;
+		}
+		
+		console.log(idToFind);
+		
+		typeElements = document.getElementsByClassName(idToFind);
+			
+		for (var i = 0; i < typeElements.length; i++) {
+			typeElements[i].style.display = 'list-item';
+		}
+	}
+}
+
+function clearFiltersSongs() {
+	var e = document.getElementById("browse_songs_select_date");
+	e.selectedIndex = 0;
+	
+	var e2 = document.getElementById("browse_songs_select_letter");
+	e2.selectedIndex = 0;
+
+	browse_songs_select();
+}
+
+function browse_person_select() {
+	var songs = document.getElementsByClassName('browse_person');
+	
+	var e = document.getElementById("browse_person_select_letter");
+	var letter = e.options[e.selectedIndex].value;
+		
+	if (letter == "all") {
+		for (var i = 0; i < songs.length; i++) {
+			songs[i].style.display = 'list-item';
+		}
+	} else {
+		for (var i = 0; i < songs.length; i++) {
+			songs[i].style.display = 'none';
+		}
+	
+		var idToFind = '';
+		if( letter != "all" ) {
+			idToFind = idToFind + 'browse_person_letter_' + letter;
+		}
+				
+		typeElements = document.getElementsByClassName(idToFind);
+			
+		for (var i = 0; i < typeElements.length; i++) {
+			typeElements[i].style.display = 'list-item';
+		}
+	}
+}
+
+function clearFiltersPersons() {
+	var e = document.getElementById("browse_person_select_letter");
+	e.selectedIndex = 0;
+
+	browse_person_select();
+}

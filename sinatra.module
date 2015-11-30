@@ -199,7 +199,7 @@ function sinatra_view_recording ($id) {
 									':id' => $recording_query['artist_display'],
 								))->fetchField();
 				
-		if( $recording_query['project_type'] == "concert" ) {
+		if( strtolower($recording_query['project_type']) == "concert" ) {
 			$project_id_query = db_query('SELECT concert_id FROM `sinatra_recording_concert` WHERE recording_id = :id',
 								array(
 									':id' => $id,
@@ -215,7 +215,7 @@ function sinatra_view_recording ($id) {
 									array(
 										':id' => $project_ids,
 									))->fetchAll();	
-		} else if ($recording_query['project_type'] == "radio"){
+		} else if (strtolower($recording_query['project_type']) == "radio"){
 			$project_id_query = db_query('SELECT radio_id FROM `sinatra_recording_radio` WHERE recording_id = :id',
 								array(
 									':id' => $id,
@@ -231,7 +231,12 @@ function sinatra_view_recording ($id) {
 									array(
 										':id' => $project_ids,
 									))->fetchAll();	
-		} else if ($recording_query['project_type'] == "film"){
+			foreach( $project_query as $radio ) {
+				$sort_array[] = array($radio->radio_id,$radio->series,$radio->episode,$radio->date, $radio->date_display, $radio->network);
+			}
+			uasort ($sort_array, "sort_episode");
+			
+		} else if (strtolower($recording_query['project_type']) == "film"){
 			$project_id_query = db_query('SELECT film_id FROM `sinatra_recording_film` WHERE recording_id = :id',
 								array(
 									':id' => $id,
@@ -247,7 +252,7 @@ function sinatra_view_recording ($id) {
 									array(
 										':id' => $project_ids,
 									))->fetchAll();	
-		} else if ($recording_query['project_type'] == "television"){
+		} else if (strtolower($recording_query['project_type']) == "television"){
 			$project_id_query = db_query('SELECT television_id FROM `sinatra_recording_television` WHERE recording_id = :id',
 								array(
 									':id' => $id,
@@ -303,17 +308,24 @@ function sinatra_view_recording ($id) {
 		}
 		
 		// Arrangers
-		$arrangers = db_query('SELECT person_id FROM `sinatra_recording_person` WHERE recording_id = :id AND role_id = :role',
+		$arrangers = db_query('SELECT `person_id` FROM `sinatra_recording_person` WHERE recording_id = :id AND role_id = :role',
 					array(
 						':id' => $id,
 						':role' => 3,
 					))->fetchAllAssoc('person_id');
-						
+		
+		
 		if( $arrangers != null ){
 			$output .= '<tr><td class="table_title">Arranged by</td><td class="table_contents">';
+			$names = array();
 			foreach ($arrangers as $person) {
-				$output .= '<a href="' . $base_url . '/person/' . $person->person_id . '">' . get_name($person->person_id) . '</a><br/>';
+				$names[] = get_name_array($person->person_id);
 			}
+			uasort($names, 'sort_people');
+			foreach($names as $person) {
+				$output .= '<a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a><br/>';
+			}
+
 			$output .= '</td></tr>';
 		}
 		// Type
@@ -328,22 +340,22 @@ function sinatra_view_recording ($id) {
 		// album
 		$count = count($project_query);
 		if( $count > 0 ) {
-			if( $recording_query['project_type'] == "concert" ) {
+			if( strtolower($recording_query['project_type']) == "concert" ) {
 				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Concert</td>';
 				foreach( $project_query as $proj ) {
 					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/concert/' . $proj->concert_id . '">' . $proj->location . ' - ' . $proj->date_display . '</a></td></tr>';
 				}
-			} else if ( $recording_query['project_type'] == "radio" ) {
+			} else if ( strtolower($recording_query['project_type']) == "radio" ) {
 				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Radio</td>';
-				foreach( $project_query as $proj ) {
-					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/radio/' . $proj->radio_id . '"><i>' . $proj->series . '</i> #' . $proj->episode .' (' .$proj->network . ', ' . $proj->date_display . ')</a></td></tr>';
+				foreach( $sort_array as $proj ) {
+					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/radio/' . $proj[0] . '"><i>' . $proj[1] . '</i> #' . $proj[2] .' (' .$proj[5] . ', ' . $proj[4] . ')</a></td></tr>';
 				}
-			} else if ( $recording_query['project_type'] == "film" ) {
+			} else if ( strtolower($recording_query['project_type']) == "film" ) {
 				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Film</td>';
 				foreach( $project_query as $proj ) {
 					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/film/' . $proj->film_id . '"><i>' . $proj->title .'</i> (' . $proj->studio . ', ' . $proj->date_display . ')</a></td></tr>';
 				}
-			} else if ( $recording_query['project_type'] == "television" ) {
+			} else if ( strtolower($recording_query['project_type']) == "television" ) {
 				$output .= '<tr><td class="table_title" rowspan="' . $count . '">Television</td>';
 				foreach( $project_query as $proj ) {
 					$output .= '<td class="table_contents">' . '<a href="' . $base_url . '/television/' . $proj->television_id . '"><i>' . $proj->series . '</i>';
@@ -364,10 +376,6 @@ function sinatra_view_recording ($id) {
 			}			
 		}
 		
-		// Length
-		if( $recording_query['length'] != null )
-			$output .= '<tr><td class="table_title">Length</td><td class="table_contents">' . $recording_query['length'] . '</td></tr>';
-		
 		//Matrix number
 		if ( $recording_query['matrix_number'] != null)
 			$output .= '<tr><td class="table_title">Matrix number</td><td class="table_contents">' . $recording_query['matrix_number'] . '</td></tr>';
@@ -375,6 +383,12 @@ function sinatra_view_recording ($id) {
 		//Take number
 		if ( $recording_query['take_number'] != null)
 			$output .= '<tr><td class="table_title">Take number</td><td class="table_contents">' . $recording_query['take_number'] . '</td></tr>';
+		
+		// Length
+		if( $recording_query['length'] != null )
+			$output .= '<tr><td class="table_title">Length</td><td class="table_contents">' . $recording_query['length'] . '</td></tr>';
+		
+
 		
 		$output .= '</table>';
 		
@@ -535,13 +549,13 @@ function sinatra_view_recording_related ($id, $session_id, $project_query, $titl
 	// Session
 	$output .= '<table class="infobox"><tr><th class="table_title related_title">This session</th>';
 	
-	if( $project_type == "concert" )
+	if( strtolower($project_type) == "concert" )
 		$output .= '<th class="table_title related_title">This concert</th>';
-	else if( $project_type == "radio" )
+	else if( strtolower($project_type) == "radio" )
 		$output .= '<th class="table_title related_title">This radio show</th>';
-	else if( $project_type == "film" )
+	else if( strtolower($project_type) == "film" )
 		$output .= '<th class="table_title related_title">This film</th>';
-	else if( $project_type == "television" )
+	else if( strtolower($project_type) == "television" )
 		$output .= '<th class="table_title related_title">This television show</th>';
 	else 
 		$output .= '<th class="table_title related_title">This album</th>';
@@ -557,7 +571,7 @@ function sinatra_view_recording_related ($id, $session_id, $project_query, $titl
 				
 	// TODO Check maintains order
 	
-	$output .= '<tr><td class="table_contents"><ol>';
+	$output .= '<tr style="vertical-align: top;"><td class="table_contents"><ol>';
 	
 	foreach ($same_date as $record) {
 		$rec_id = $record->recording_id;
@@ -570,7 +584,7 @@ function sinatra_view_recording_related ($id, $session_id, $project_query, $titl
 	
 	$output .= '</ol></td>';
 			
-	if( $project_type == "concert" ) {				
+	if( strtolower($project_type) == "concert" ) {				
 		$output .= '<td class="table_contents">';
 		foreach( $project_query as $proj ) {
 			if( count($project_query) > 1 ) {
@@ -593,7 +607,7 @@ function sinatra_view_recording_related ($id, $session_id, $project_query, $titl
 			$output .= '</ol>';
 		}
 		$output .= '</td>';		
-	} else if ( $project_type == "radio" ) {
+	} else if ( strtolower($project_type) == "radio" ) {
 		$output .= '<td class="table_contents">';
 		foreach( $project_query as $proj ) {
 			if( count($project_query) > 1 ) {
@@ -616,7 +630,7 @@ function sinatra_view_recording_related ($id, $session_id, $project_query, $titl
 			$output .= '</ol>';
 		}
 		$output .= '</td>';		
-	} else if ( $project_type == "film" ) {
+	} else if ( strtolower($project_type) == "film" ) {
 		$output .= '<td class="table_contents">';
 		foreach( $project_query as $proj ) {
 			if( count($project_query) > 1 ) {
@@ -639,7 +653,7 @@ function sinatra_view_recording_related ($id, $session_id, $project_query, $titl
 			$output .= '</ol>';
 		}
 		$output .= '</td>';		
-	} else if ( $project_type == "television" ) {
+	} else if ( strtolower($project_type) == "television" ) {
 		$output .= '<td class="table_contents">';
 		foreach( $project_query as $proj ) {
 			if( count($project_query) > 1 ) {
@@ -1438,8 +1452,9 @@ function get_recording_name($id) {
 		if ($record->parody == 1)
 			$parody = 1;
 	}
-						
-	$song_query = db_query('SELECT title FROM `sinatra_song` WHERE song_id IN (:id)',
+	
+					
+	$song_query = db_query('SELECT title FROM `sinatra_song` WHERE song_id IN (:id) ORDER BY FIELD(song_id, :id)',
 								array(
 									':id' => $song_ids,
 								))->fetchAll();
@@ -1495,7 +1510,7 @@ function get_recording_people_display($id) {
 
 function sort_personnel($a, $b) {
 		
-	$order = array('Trumpet', 'Flugelhorn', 'Trombone', 'Bass trombone', 'Valve trombone', 'Horn','French horn', 'Tuba', 'Reeds', 'Saxophone', 'Woodwinds', 'Alto saxophone', 'Tenor saxophone', 'Baritone saxophone', 'Clarinet', 'Bass clarinet','Contra-clarinet', 'Flute','Alto flute','Bass flute', 'Bassoon','Oboe', 'Piccolo', 'English horn','Strings','Concertmaster', 'Violin', 'Viola', 'Cello', 'Harp','Piano', 'Celeste','Fender Rhodes piano','Organ', 'Accordion', 'Harmonica','Harpsichord','Synthesizer','Cordovox','Guitar','Classic guitar','Electric guitar', 'Banjo','Bass', 'Electric bass', 'Fender bass','Fender upright bass', 'Drums', 'Percussion', 'Vibraphone', 'Timpani', 'Conga', 'Bongos', 'Cymbals', 'Chimes', 'Bells', 'Mallets', 'Effects', 'Vocals', 'Soloist','Soprano','Backing vocals', 'Additional vocals', 'Vocal group', 'Vocal director', 'Vocal arranger', 'Conductor', 'Additional conducting', 'Leader', 'Orchestra', 'Contractor', 'Producer');
+	$order = array('Trumpet', 'Flugelhorn', 'Trombone', 'Bass trombone', 'Valve trombone', 'Tuba', 'Horn','French horn', 'Reeds', 'Saxophone', 'Woodwinds', 'Alto saxophone', 'Tenor saxophone', 'Baritone saxophone', 'Clarinet', 'Bass clarinet','Contra-clarinet', 'Flute','Alto flute','Bass flute', 'Bassoon','Oboe', 'Piccolo', 'English horn','Strings','Concertmaster', 'Violin', 'Viola', 'Cello', 'Harp','Piano', 'Celeste','Fender Rhodes piano','Organ', 'Accordion', 'Harmonica','Harpsichord','Synthesizer','Cordovox','Guitar','Classic guitar','Electric guitar', 'Banjo','Bass', 'Electric bass', 'Fender bass','Fender upright bass', 'Drums', 'Percussion', 'Vibraphone', 'Timpani', 'Conga', 'Bongos', 'Cymbals', 'Chimes', 'Bells', 'Mallets', 'Rol drum', 'Effects', 'Sound effects', 'Imitations', 'Vocals', 'Soloist','Soprano','Backing vocals', 'Additional vocals', 'Vocal group', 'Vocal director', 'Vocal arranger', 'Conductor', 'Additional conducting', 'Leader', 'Orchestra', 'Contractor', 'Producer');
 	
 	$pos_a = array_search($a, $order);
 	$pos_b = array_search($b, $order);
@@ -1907,7 +1922,6 @@ function sinatra_browse() {
 function sinatra_browse_recordings() {
 	global $base_url;
 	drupal_add_js(drupal_get_path('module', 'sinatra') .'/sinatra.js');
-
 	
 	$recording_query = db_query('SELECT * FROM `sinatra_session_recording`')->fetchAll();
 	$session_query = db_query('SELECT * FROM `sinatra_session`')->fetchAllAssoc('session_id');
@@ -1965,10 +1979,10 @@ function sinatra_browse_recordings() {
 	uasort ($sort_array, "sort_recording");
 	
 	foreach( $sort_array as $rec ) {
-		if( $rec[0] > 638 )
+		if( $rec[0] > 916 )
 			$output .= '<li class="' . create_browse_class($rec[0], $rec[5], $rec[2]) . '"><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a> <span style="color:blue">new!</span></li>';
 		else
-			$output .= '<li class="' . create_browse_class($rec[0], $rec[5], $rec[2]) . '"><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ')</a></li>';
+			$output .= '<li class="' . create_browse_class($rec[0], $rec[5], $rec[2]) . '"><a href="' . $base_url . '/recording/' . $rec[0] . '">' . $rec[1] . ' - ' . $rec[4] . ' (' . $rec[5] . ') ' . '</a></li>';
 	}
 	
 	$output .= '</ul></div>';
@@ -2000,29 +2014,95 @@ function create_browse_class($id, $type, $date) {
 function sinatra_browse_songs() {
 	global $base_url;
 	
-	$output = '<div class="browse"><ul>';
-	$query = db_query('SELECT song_id, title FROM `sinatra_song`')->fetchAll();
+	drupal_add_js(drupal_get_path('module', 'sinatra') .'/sinatra.js');
+
+	$alphabet_array = array('\'', '(', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z');
+	
+	$output = '<select id="browse_songs_select_letter" onchange="browse_songs_select()">';
+	$output .= '<option value="all">Any letter</option>';
+	foreach( $alphabet_array as $year ) {
+		$output .= '<option value="' . $year . '">' . $year . '</option>';
+	}
+	$output .= '</select>';
+	
+	$year_array = array();
+	$year_array[] = 1863;
+	$year_array[] = 1865;
+	$year_array[] = 1892;
+	$year_array[] = 1893;
+	$year_array[] = 1898;
+	$year_array[] = 1901;
+	$year_array[] = 1902;
+	$year_array[] = 1910;
+	$year_array[] = 1912;
+	
+	$year = 1916;
+	while( $year < 1989 ) {
+		$year_array[] = $year;
+		$year++;
+	}
+	
+	$output .= '<select id="browse_songs_select_date" onchange="browse_songs_select()">';
+	$output .= '<option value="0">Any year</option>';
+	foreach( $year_array as $year ) {
+		$output .= '<option value="' . $year . '">' . $year . '</option>';
+	}
+	$output .= '</select>';
+	
+	$output .= '<button onclick="clearFiltersSongs()">Clear filters</button>';
+
+	
+	$output .= '<div class="browse"><ul>';
+	$query = db_query('SELECT song_id, title, year FROM `sinatra_song`')->fetchAll();
 	
 	$sort_array = array();
 	foreach( $query as $song ) {
-		$sort_array[] = array($song->song_id,$song->title);
+		$sort_array[] = array($song->song_id,$song->title,$song->year);
 	}
 	uasort ($sort_array, "sort_name");
 
 	foreach( $sort_array as $song ) {
-		if( $song[0] > 481 )
-			$output .= '<li><a href="' . $base_url . '/song/' . $song[0] . '">' . $song[1] . '</a> <span style="color:blue">new!</span></li>';
+		if( $song[0] > 623 )
+			$output .= '<li class="' . create_browse_class_song($song[1], $song[2]) . '"><a href="' . $base_url . '/song/' . $song[0] . '">' . $song[1] . '</a> <span style="color:blue">new!</span></li>';
 		else
-			$output .= '<li><a href="' . $base_url . '/song/' . $song[0] . '">' . $song[1] . '</a></li>';
+			$output .= '<li class="' . create_browse_class_song($song[1], $song[2]) . '"><a href="' . $base_url . '/song/' . $song[0] . '">' . $song[1] . '</a></li>';
 	}
 	$output .= '</ul></div>';
 	return $output;
 }
 
+function create_browse_class_song($name, $year) {		
+	$class = 'browse_song';	
+		
+	if( !empty($name) ) {
+		$class .= ' browse_song_letter_' . $name[0];
+	}
+		
+	if( !empty($year) ) {
+		$class = $class . ' browse_song_year_' . $year;
+	}
+						
+	return $class;
+}
+
+
 function sinatra_browse_people() {
 	global $base_url;
 	
-	$output = '<div class="browse"><ul>';
+	drupal_add_js(drupal_get_path('module', 'sinatra') .'/sinatra.js');
+	
+	$alphabet_array = array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z');
+
+	$output = '<select id="browse_person_select_letter" onchange="browse_person_select()">';
+	$output .= '<option value="all">Any letter</option>';
+	foreach( $alphabet_array as $year ) {
+		$output .= '<option value="' . $year . '">' . $year . '</option>';
+	}
+	$output .= '</select>';
+
+	$output .= '<button onclick="clearFiltersPersons()">Clear filters</button>';
+	
+	$output .= '<div class="browse"><ul>';
 	$query = db_query('SELECT person_id, first_name, surname FROM `sinatra_person`')->fetchAll();
 	
 	$sort_array = array();
@@ -2032,14 +2112,24 @@ function sinatra_browse_people() {
 	uasort ($sort_array, "sort_people");
 
 	foreach( $sort_array as $person ) {
-		if( $person[0] > 1268 )
-			$output .= '<li><a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a> <span style="color:blue">new!</span></li>';
+		if( $person[0] > 1963 )
+			$output .= '<li class="' . create_browse_class_person($person[2]) . '"><a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a> <span style="color:blue">new!</span></li>';
 		else
-			$output .= '<li><a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a></li>';
+			$output .= '<li class="' . create_browse_class_person($person[2]) . '"><a href="' . $base_url . '/person/' . $person[0] . '">' . $person[1] . ' ' . $person[2] . '</a></li>';
 	}
 	
 	$output .= '</ul></div>';
 	return $output;
+}
+
+function create_browse_class_person($surname) {		
+	$class = 'browse_person';	
+		
+	if( !empty($surname) ) {
+		$class .= ' browse_person_letter_' . $surname[0];
+	}
+						
+	return $class;
 }
 
 function sinatra_browse_albums() {
@@ -2055,7 +2145,7 @@ function sinatra_browse_albums() {
 	uasort ($sort_array, "sort_albums");
 
 	foreach( $sort_array as $album ) {
-		if( $album[0] > 54 )
+		if( $album[0] > 63 )
 			$output .= '<li><a href="' . $base_url . '/album/' . $album[0] . '">' . $album[1] . ' (' . $album[2] .')</a> <span style="color:blue">new!</span></li>';
 		else
 			$output .= '<li><a href="' . $base_url . '/album/' . $album[0] . '">' . $album[1] . ' (' . $album[2] .')</a></li>';
@@ -2113,6 +2203,7 @@ function sinatra_browse_television() {
 	
 	$output = '<div class="browse"><ul>';
 	$query = db_query('SELECT television_id, series, episode, date_display, date FROM `sinatra_television`')->fetchAll();
+	
 	if( count($query) > 0 ) {
 		foreach( $query as $television ) {
 			$sort_array[] = array($television->television_id,$television->series,$television->episode,$television->date, $television->date_display);
@@ -2377,6 +2468,7 @@ function sinatra_view_location ($id) {
 		$type = get_location_type($location_query);
 		$output = '';			
 		// TITLE and add location info
+
 		switch ($type){
 			case "room":
 				$location_details = create_location_string($id, "room");
@@ -2407,7 +2499,11 @@ function sinatra_view_location ($id) {
 				$location_details = 'An error has occured';
 		}
 		drupal_set_title($title);
-		$output .= '<h3>' . $location_details . '</h3>';
+		
+		if( $type !== "country" )
+			$output .= '<h3>' . "Located in " . $location_details . '</h3>';
+		else
+			$output .= '<h3>' . $location_details . '</h3>';
 
 		//show sessions
 		
@@ -2424,16 +2520,19 @@ function sinatra_view_location ($id) {
 		}
 		
 		if ($type == "city"){
+			$output .= '<h3>Venues</h3>';
 			//get venues
 			$output .= getSessionsByCity($id, $location_query['city']);
 
 		}
 		
 		if ($type == "state"){
+			$output .= '<h3>Cities</h3>';
 			$output .= getSessionsByState($id, $location_query['state']);
 		}
 		
 		if ($type == "country"){
+			$output .= '<h3>States</h3>';
 			$output .= getSessionsByCountry($id, $location_query['country']);
 		}
 		
@@ -2446,7 +2545,7 @@ function getSessionsByRoom($id){
 	global $base_url;
 	
 	$output = "";
-	$session_query = db_query('SELECT session_id, date_display FROM `sinatra_session` WHERE location_id = :id',
+	$session_query = db_query('SELECT session_id, date, date_display FROM `sinatra_session` WHERE location_id = :id',
 					array(
 						':id' => $id,
 					))->fetchAll();
@@ -2456,13 +2555,16 @@ function getSessionsByRoom($id){
 	else{
 		$sort_array = array();
 		foreach($session_query as $session) {
-			$sort_array[] = array($session->session_id, $session->date_display);
+			$sort_array[] = array($session->session_id, $session->date, $session->date_display);
 		}
+		uasort ($sort_array, "sort_session_date");
 		
+		$output .= '<ul>';
 		foreach($sort_array as $session){
-			$output .= '<li><a href= "' . $base_url . '/session/' . $session[0] . '">' . $session[1] . '</a></li>'; 
+			$output .= '<li><a href= "' . $base_url . '/session/' . $session[0] . '">' . $session[2] . '</a></li>'; 
 			//$output .= '<li>' . $session[1] . '</li>';
 		}
+		$output .= '</ul>';
 		return $output;		
 	} 
 }
@@ -2473,7 +2575,9 @@ function getSessionsByVenue($id, $vn, $overwrite){ /*Annoying extra bool varialb
 
 	$output = "";
 	
-	$venue_query = db_query('SELECT location_id, venue_name, room FROM `sinatra_location` WHERE venue_name = :name AND location_id != :id',
+	//$venue_query = db_query('SELECT location_id, venue_name, room FROM `sinatra_location` WHERE venue_name = :name AND location_id != :id',
+	$city = db_query('SELECT city FROM `sinatra_location` WHERE  location_id = :id', array( ':id' => $id ))->fetchField();
+	$venue_query = db_query('SELECT * FROM `sinatra_location` WHERE venue_name = :name AND location_id != :id',
 					array(
 						':id' => $id,
 						':name' => $vn,
@@ -2497,37 +2601,41 @@ function getSessionsByVenue($id, $vn, $overwrite){ /*Annoying extra bool varialb
 		}					
 	}
 	else{
-		$output .= '<h3>Rooms in ' . $vn . '</h3>';
-		$output .= '<ul>';
+		//$output .= '<h3>Rooms in ' . $vn . '</h3>';
+		//$output .= '<ul>';
 		/*add sort at some point*/
 		$sort_array2 = array();
 		foreach($venue_query as $venue){
-			$sort_array2[] = array($venue->location_id, $venue->venue_name, $venue->room);
+			// As we can have venues in different cities with the same name
+			if( $venue->city === $city )
+				$sort_array2[] = array($venue->location_id, $venue->venue_name, $venue->room);
 		}
+		uasort ($sort_array2, "sort_name");
 		//print out rooms
-		foreach($sort_array2 as $venue) {
+		/*foreach($sort_array2 as $venue) {
 				$output .= '<li><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[2] . '</a></li>';
-		}
-		$output .='</ul>';
+		}*/
+		//$output .='</ul>';
 		
 		//get sessions too
-		$output .= '<ul>';
-		$output .= '<h3>Sessions at ' . $vn . '</h3>';
+		//$output .= '<ul>';
+		//$output .= '<h3>Rooms in ' . $vn . '</h3>';
 		
 		$output .= '<ul>';
 		foreach($sort_array2 as $venue){
-			$output .= '<li><h3>Sessions in <a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[2] . '</a></h3></li>';
+			$output .= '<li><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[2] . '</a></li>';
 			$output .= getSessionsByRoom($venue[0]);
+			//$output .= '</ul>';
 		}
 		$output .= '</ul>';
-		$output .= '</ul>';
+		//$output .= '</ul>';
 		$getLocSes = getSessionsByRoom($id);
 		if(empty($getLocSes)){
 			return $output;
 		}
 		else{
 			$output .= '<ul>';
-			$output .= '<h3>Other sessions in ' . $vn . '</h3>';
+			$output .= '<li>Other sessions at ' . $vn . '</li>';
 			$output .= getSessionsByRoom($id);
 			
 			$output .= '</ul>';		
@@ -2563,39 +2671,36 @@ function getSessionsByCity($id, $city){
 	}
 	/*add sort at some point*/
 	else{
-		$output .= '<h3>Studios in ' . $city . '</h3>';
-		$output .= '<ul>';
+		//$output .= '<h3>Venues in ' . $city . '</h3>';
+		//$output .= '<ul>';
 		$sort_array2 = array();
 		foreach($venue_query as $venue){
 			$sort_array2[] = array($venue->location_id, $venue->venue_name);
 		}
+		uasort ($sort_array2, "sort_name");
 		//print out venues
-		foreach($sort_array2 as $venue) {
+		/*foreach($sort_array2 as $venue) {
 			$output .= '<li><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[1] . '</a></li>';
 		}
-		$output .='</ul>';
+		$output .='</ul>';*/
 		
 		//get sessions too
-		$output .= '<h3>Sessions in ' . $city . '</h3>';
+		//$output .= '<h3>Sessions in ' . $city . '</h3>';
 		
 		$output .= '<ul>';
 		foreach($sort_array2 as $venue){
-			$output .= '<li><h3><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[1] . '</a></h3></li>';
+			$output .= '<li><a href="' . $base_url . '/location/' . $venue[0] . '">' . $venue[1] . '</a></li>';
 			$output .= getSessionsByVenue($venue[0], $venue[1], FALSE);
 		}
 			
 		$getCitSes = getSessionsByVenue($id, $city, TRUE);
-		if(empty($getCitSes)){
-			return $output;
-		}
-		else{
-			$output .= '<h3>Other sessions in ' . $city . '</h3>';
+		if(!empty($getCitSes)){
+			$output .= '<li>Other sessions in ' . $city . '</li>';
 			$output .= $getCitSes;
-		
-			$output .= '</ul>';
-		
-			return $output;
 		}
+		$output .= '</ul>';
+		
+		return $output;
 	}		
 }
 
@@ -2629,23 +2734,24 @@ function getSessionsByState($id, $state){
 		
 	}
 	else{
-		$output .= '<h3>Cities in ' . $state . '</h3>';
-		$output .= '<ul>';
+		//$output .= '<h3>Cities in ' . $state . '</h3>';
+		//$output .= '<ul>';
 		$sort_array3 = array();
 		foreach($city_query as $city){
 			$sort_array3[] = array($city->location_id, $city->city);
 		}
+		uasort ($sort_array3, "sort_name");
 		//print out cities
-		foreach($sort_array3 as $city){
+		/*foreach($sort_array3 as $city){
 			
 			$output .= '<li><a href="' . $base_url . '/location/' . $city[0] . '">' . $city[1] . '</a></li>';
 		}
-		$output .= '</ul>';
+		$output .= '</ul>';*/
 		
 		$output .= '<ul>';
 		foreach($sort_array3 as $city){
 		//for each city, go get a list of venues and then get a list of sessions by venue. 
-			$output .= '<li><h3>' . $city[1] . '</h3></li>';
+			$output .= '<li><a href="' . $base_url . '/location/' . $city[0] . '">' . $city[1] . '</a></li>';
 			$output .= getSessionsByCity($city[0], $city[1]);
 		}
 		$output .= '</ul>';
@@ -2656,10 +2762,10 @@ function getSessionsByState($id, $state){
 			return $output;
 		}
 		else{
-			$output .= '<ul>';
+			//$output .= '<ul>';
 			$output .= '<h3>Other sessions in ' . $state . '</h3>';
 			$output .= getSessionsByVenue($id, $state, TRUE);
-			$output .= '</ul>';
+			//$output .= '</ul>';
 			
 			return $output;
 		}
@@ -2670,7 +2776,6 @@ function getSessionsByCountry($id, $country){
 	global $base_url;
 	$output = '';	
 	
-
 	//get cities
 	$state_query = db_query('SELECT location_id, state FROM `sinatra_location` WHERE country = :name AND location_id != :id AND city IS NULL AND venue_name IS NULL',
 			array(
@@ -2694,22 +2799,26 @@ function getSessionsByCountry($id, $country){
 		}
 	}
 	else{
-		$output .= '<h3>States in ' . $country . '</h3>';
-		$output .= '<ul>';
+		//$output .= '<h3>States in ' . $country . '</h3>';
+		
 		$sort_array4 = array();
 		foreach($state_query as $state){
 			$sort_array4[] = array($state->location_id, $state->state);
 		}
+		uasort ($sort_array4, "sort_name");
+		
 		//print out states
+		/*
+		$output .= '<ul>';		
 		foreach($sort_array4 as $state){
 			$output .= '<li><a href="' . $base_url . '/location/' . $state[0] . '">' . $state[1] . '</a></li>';
 		}
-		$output .= '</ul>';
+		$output .= '</ul>';*/
 		
 		$output .= '<ul>';
 		foreach($sort_array4 as $state){
 		//for each state, go get a list of cities and then get a list venues in that city and then get a list of sessions by venue. 
-			$output .= '<li><h3>' . $state[1] . '</h3></li>';
+			$output .= '<li><a href="' . $base_url . '/location/' . $state[0] . '">' . $state[1] . '</a></li>';
 			$output .= getSessionsByState($state[0], $state[1]);
 		}
 		$output .= '</ul>';
@@ -2720,10 +2829,10 @@ function getSessionsByCountry($id, $country){
 			return $output;
 		}
 		else{
-			$output .= '<ul>';
-			$output .= '<h3>Other sessions in ' . $country . '</h3>';
-			$output .= getSessionsByVenue($id, $country, TRUE);
-			$output .= '</ul>';
+			//$output .= '<ul>';
+			$output .= '<li>Other sessions in ' . $country . '</li>';
+			$output .= getSessionsByRoom($id, $country, TRUE);
+			//$output .= '</ul>';
 		
 			return $output;
 		}
@@ -2733,14 +2842,31 @@ function getSessionsByCountry($id, $country){
 function sinatra_browse_location() {
 	global $base_url;
 	
+	/*$query = db_query('SELECT location_id, country FROM `sinatra_location`')->fetchAll();
+
+	$sort_array = array();
+	$seen_list = array();
+	foreach( $query as $song ) {
+		if( in_array($song->country, 
+		$sort_array[] = array($song->location_id,$song->country);
+	}
+	uasort ($sort_array, "sort_name");
+	
+	$output = '<select id="browse_recordings_select_country" onchange="browse_location_select()">';
+	$output .= '<option value="0"> Any country</option>';
+	foreach( $sort_array as $song ) {
+		$output .= '<option value="' . $song[0] . '">' . $song[1] . '</option>';
+	}
+	$output .= '</select>';
+	*/
 	$output = '<div class="browse"><ul>';
-	$query = db_query('SELECT location_id, venue_name FROM `sinatra_location`')->fetchAll();
+	$query = db_query('SELECT * FROM `sinatra_location`')->fetchAll();
 	
 	$sort_array = array();
 	foreach( $query as $location ) {
-		$sort_array[] = array($location->location_id, $location->venue_name);
+		$sort_array[] = array($location->location_id, $location->room, $location->venue_name, $location->city, $location->state, $location->country);
 	}
-	uasort ($sort_array, "sort_name");
+	uasort ($sort_array, "sort_location");
 
 	foreach( $sort_array as $location ) {
 		/*call funcn to get location details - in case no state/country etc..*/
@@ -2758,32 +2884,56 @@ function sinatra_browse_location() {
 function create_location_string ($id, $ignore){
 
 	global $base_url;
-
+	
 	$location=get_location_info($id);
+	$roomTrue = false;
+	$venueTrue = false;
+	$cityTrue = false;
+	$stateTrue = false;
+	$countryTrue = false;
+	
+	if( $ignore === "room" ) {
+		$roomTrue = true;
+	} else if( $ignore === "venue" ) {
+		$venueTrue = true;
+	} else if( $ignore === "city" ) {
+		$cityTrue = true;
+	} else if( $ignore === "state" ) {
+		$stateTrue = true;
+	} else if( $ignore === "country" ) {
+		$countryTrue = true;
+	} 
+
 	$location_printout = "";	
 	//generates the output string - due to various (16) different combinations, instead check whether that piece of data is there and, if so, whether one of the following pieces of data is there.
 	//Now with extra complicatedness - if there is a thing set before it, then the venue/city/etc will have a different id, so need to find it! Else its the same as the one supplied $id.
 	//Oh, and ignore skips things, which is fairly self explanatory
-	if (isset($location['room']) AND $ignore != "room"){
+	if (isset($location['room']) AND $location['room'] != ' ' AND $location['room'] != '' AND $ignore != "room"){
+		$roomTrue = true;
 		$location_printout .= '<a href="' . $base_url . '/location/' . $id .'">' . $location['room'] . '</a>';
 		if(isset($location['venue']) or isset($location['city']) or isset($location['state']) or isset($location['country'])){
 			$location_printout .= ', ';
 		}
 	}
-	if (isset($location['venue_name']) AND $ignore != "venue"){
-		if(isset($location['room'])){
+	if (isset($location['venue_name']) AND $location['venue_name'] != ' ' AND $location['venue_name'] != '' AND $ignore != "venue"){
+		$venueTrue = true;
+		
+		if($roomTrue){
 			$venue_id = get_venue_link($location);
 		}
 		else{
 			$venue_id = $id;
 		}
+
 		$location_printout .= '<a href="' . $base_url . '/location/' . $venue_id . '">' . $location['venue_name'] . '</a>';
 		if(isset($location['city']) or isset($location['state']) or isset($location['country'])){
 			$location_printout .= ', ';
 		}
 	}
-	if (isset($location['city']) AND $ignore != "city"){
-		if(isset($location['room']) or isset($location['venue_name'])){
+	if (isset($location['city']) AND $location['city'] != ' ' AND $location['city'] != '' AND $ignore != "city"){
+		$cityTrue = true;
+
+		if($roomTrue OR $venueTrue){
 			$venue_id = get_city_link($location);
 		}
 		else{
@@ -2797,8 +2947,10 @@ function create_location_string ($id, $ignore){
 		}
 	}
 	
-	if (isset($location['state']) AND $ignore != "state"){
-		if(isset($location['room']) or isset($location['venue_name']) or isset($location['city'])){
+	if (isset($location['state']) AND $location['state'] != ' ' AND $location['state'] != '' AND $ignore != "state"){
+		$stateTrue = true;
+
+		if($roomTrue or $venueTrue or $cityTrue){
 			$venue_id = get_state_link($location);
 		}
 		else{
@@ -2814,8 +2966,10 @@ function create_location_string ($id, $ignore){
 
 
 	
-	if (isset($location['country']) AND $ignore != "country"){
-		if(isset($location['room']) or isset($location['venue_name']) or isset($location['city']) or isset($location['state'])){
+	if (isset($location['country']) AND $location['country'] != ' ' AND $ignore != "country"){
+		$countryTrue = true;
+
+		if($roomTrue or $venueTrue or $cityTrue or $stateTrue){
 			$venue_id = get_country_link($location);
 		}
 		else{
@@ -2844,21 +2998,31 @@ function sort_session_date($a, $b) {
 }
 
 function get_location_type($location){	
-	if ($location['room'] == "" AND $location['venue_name'] == "" AND $location['city'] == "" AND $location['state'] == "" AND isset($location['country'])){
+	/*if ($location['room'] == " " AND $location['venue_name'] == " " AND $location['city'] == " " AND $location['state'] == " " AND isset($location['country'])){
 		return "country";
 	}
-	else if ($location['room'] == "" AND $location['venue_name'] == "" AND $location['city'] == "" AND isset($location['state'])){
+	else if ($location['room'] == " " AND $location['venue_name'] == " " AND $location['city'] == " " AND isset($location['state'])){
 		return "state";
 	}
-	else if ($location['room'] == "" AND $location['venue_name'] == "" AND isset($location['city'])){
+	else if ($location['room'] == " " AND $location['venue_name'] == " " AND isset($location['city'])){
 		return "city";
 	}
-	else if ($location['room'] == "" AND isset($location['venue_name'])){
+	else if ($location['room'] == " " AND isset($location['venue_name'])){
 		return "venue";
 	}
 	else{
 		return "room";
-	}
+	}*/
+	if( !empty($location['room']) )
+		return "room";
+	if( !empty($location['venue_name']) )
+		return "venue";
+	if( !empty($location['city']) )
+		return "city";
+	if( !empty($location['state']) )
+		return "state";
+	if( !empty($location['country']) )
+		return "country";
 }
 
 function get_venue_link($location){
@@ -2870,7 +3034,7 @@ function get_venue_link($location){
 }
 
 function get_city_link($location){
-	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE city = :city AND room IS NULL AND venue_name IS NULL',
+	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE city = :city  AND room IS NULL  AND venue_name IS NULL ',
 		array(
 		':city' => $location['city'],
 		))->fetchField();
@@ -2878,7 +3042,7 @@ function get_city_link($location){
 }
 
 function get_state_link($location){
-	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE state = :state AND room IS NULL AND venue_name IS NULL AND city IS NULL',
+	$query = db_query('SELECT location_id FROM `sinatra_location` WHERE state = :state AND room IS NULL  AND venue_name IS NULL  AND city IS NULL ',
 		array(
 		':state' => $location['state'],
 		))->fetchField();
@@ -2979,17 +3143,17 @@ function sinatra_browse_session() {
 	global $base_url;
 	
 	$output = '<div class="browse"><ul>';
-	$query = db_query('SELECT session_id, date_display FROM `sinatra_session`')->fetchAll();
+	$query = db_query('SELECT session_id, date, date_display FROM `sinatra_session`')->fetchAll();
 	
 	$sort_array = array();
 	foreach( $query as $session ) {
-		$sort_array[] = array($session->session_id, $session->date_display);
+		$sort_array[] = array($session->session_id, $session->date,$session->date_display);
 	}
-	// sorrt later uasort ($sort_array, "sort_name");
+	uasort ($sort_array, "sort_session_date");
 
 	foreach( $sort_array as $session ) {
 		/* commenting out, as during the first update all will be newif( $location[0] > 1268 )*/
-			$output .= '<li><a href="' . $base_url . '/session/' . $session[0] . '">' . $session[1] . '</a> <span style="color:blue">new!</span></li>';
+			$output .= '<li><a href="' . $base_url . '/session/' . $session[0] . '">' . $session[2] . '</a> <span style="color:blue">new!</span></li>';
 		/*else
 			$output .= '<li><a href="' . $base_url . '/location/' . $location[0] . '">' . $location_string . '</a></li>';*/
 	}
@@ -2997,3 +3161,48 @@ function sinatra_browse_session() {
 	$output .= '</ul></div>';
 	return $output;
 }
+
+function sort_location($a, $b) {
+	
+	$country_a = $a[5];
+	$country_b = $b[5];
+	
+	if( $country_a > $country_b )
+		return 1;
+	if( $country_a < $country_b )
+		return -1;
+	
+	$state_a = $a[4];
+	$state_b = $b[4];
+	
+	if( $state_a > $state_b ) 
+		return 1;
+	if( $state_a < $state_b )
+		return -1;
+	
+	$city_a = $a[3];
+	$city_b = $b[3];
+
+	if( $city_a > $city_b )
+		return 1;
+	if( $city_a < $city_b )
+		return -1;
+	
+	$venue_name_a = $a[2];
+	$venue_name_b = $b[2];
+		
+	if( $venue_name_a > $venue_name_b ) 
+		return 1;
+	if( $venue_name_a < $venue_name_b )
+		return -1;	
+	
+	$room_a = $a[1];
+	$room_b = $b[1];
+	
+	if( $room_a > $room_b ) 
+		return 1;
+	if( $room_a < $room_b )
+		return -1;
+	return 0;
+}
+

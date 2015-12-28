@@ -23,109 +23,448 @@ function sinatra_create_menu() {
 function sinatra_create_form($form, &$form_state) {
 	global $user;
 	
-	$song_query = db_query('SELECT title FROM `sinatra_song`'	)->fetchCol();
+	if(isset($form_state['storage']['results'])) {
+		print_r($form_state['storage']['results']);
+	  $form['results'] = array (
+            '#markup' => $form_state['storage']['results'],
+            '#prefix' => '<p>',
+            '#suffix' => '</p>',
+	  );
+	}
+		
+	$song_query = db_query('SELECT song_id, title FROM `sinatra_song` ORDER BY `title`'	)->fetchAll();
+			
+	foreach ( $song_query as $record ) {
+		$songs[$record->song_id] = $record->title;
+	}
 	
-	$form['song'] = array(
-		'#type' => 'select',
-		'#title' => 'Song',
-		'#options' => $song_query,
-		'#required' => TRUE,
-	);
+	
+    $form['songs'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Songs'),
+        '#prefix' => '<div id="entry-fieldset-wrapper">',
+        '#suffix' => '</div>',
+    );
+
+    if (empty($form_state['num_names'])) {
+        $form_state['num_names'] = 1;
+    }
+
+    for ($i = 0; $i < $form_state['num_names']; $i++) {
+
+        $form['songs']['song'][$i] = array(
+			'#type' => 'select',
+			'#title' => 'Song',
+			'#options' => $songs,
+			'#required' => TRUE,        
+		);
+    }
+
+    $form['songs']['add_another'] = array(
+        '#type' => 'submit',
+        '#value' => t('Add another song'),
+        '#submit' => array('add_more_song'),
+        '#ajax' => array(
+            'callback' => 'add_more_song_callback',
+            'wrapper' => 'entry-fieldset-wrapper',
+        ),
+    );
+    
+	$form['songs']['parody'] = array(
+		'#type' => 'checkbox',
+		'#title' => 'Parody',
+	);	
+	
+	$artist_query = db_query('SELECT display_id, display_name FROM `sinatra_artist_display` ORDER BY `display_name` ASC'	)->fetchAll();
+	
+	foreach ( $artist_query as $record ) {
+		$artists[$record->display_id] = $record->display_name;
+	}
 	
 	$form['artist'] = array(
-		'#type' => 'textfield',
+		'#type' => 'select',
 		'#title' => 'Artist',
+		'#options' => $artists,
 		'#required' => TRUE,
 	);	
 	
-	$form['date'] = array(
-		'#type' => 'textfield',
-		'#title' => 'Date YYYY-MM-DD',
+	$session_query = db_query('SELECT `session_id`, `date_display` FROM `sinatra_session` ORDER BY `date` ASC'	)->fetchAll();
+		
+	foreach ( $session_query as $record ) {
+		$sessions[$record->session_id] = $record->date_display;
+	}
+	
+	$form['session'] = array(
+		'#type' => 'select',
+		'#title' => 'Session',
+		'#options' => $sessions,
 		'#required' => TRUE,
 	);	
-
-	$form['date_display'] = array(
+	$form['session_position'] = array(
 		'#type' => 'textfield',
-		'#title' => 'Date display',
+		'#title' => 'Position',
 		'#required' => TRUE,
-	);	
+	);		
+	$types = array('Studio'=>'Studio', 'Live'=>'Live', 'Radio'=>'Radio', 'Alternate take'=>'Alternate take', 'Television'=>'Television', 'Film'=>'Film', 'Electronic duet'=>'Electronic duet', 'Session material'=>'Session material', 'Edit'=>'Edit', 'Demo'=>'Demo');
 	
 	$form['type'] = array(
-		'#type' => 'textfield',
+		'#type' => 'select',
 		'#title' => 'Type',
+		'#options' => $types,
 		'#required' => TRUE,
-	);	
+		'#default_value' => 'Studio'
+	);		
 	
-	$project_query = db_query('SELECT title FROM `sinatra_album`'	)->fetchCol();
-
+	$proj_types = array('album'=>'album', 'concert'=>'concert', 'radio'=>'radio', 'film'=>'film', 'television'=>'television');
+	
+	$form['proj_type'] = array(
+		'#type' => 'select',
+		'#title' => 'Project Type',
+		'#options' => $proj_types,
+		'#required' => TRUE,
+		'#default_value' => 'album'
+	);			
+	
+	$project_query = db_query('SELECT album_id, title FROM `sinatra_album` ORDER BY title ASC')->fetchAll();
+	$albums[0] = "Select me if project_type != album";
+	foreach ( $project_query as $record ) {
+		$albums[$record->album_id] = $record->title;
+	}
 	$form['album'] = array(
 		'#type' => 'select',
 		'#title' => 'Album',
-		'#options' => $project_query,
+		'#options' => $albums,
 		'#required' => TRUE,
+		'#default_value' => 0
 	);		
-
+	
+	$project_query = db_query("SELECT concert_id, location, date_display FROM `sinatra_concert` ORDER BY date ASC")->fetchAll();
+	$concerts[0] = "Select me if project_type != concert";
+	foreach ( $project_query as $record ) {
+		$concerts[$record->concert_id] = $record->location . " - " . $record->date_display;
+	}
+	$form['concert'] = array(
+		'#type' => 'select',
+		'#title' => 'Concert',
+		'#options' => $concerts,
+		'#required' => TRUE,
+		'#default_value' => "Select me if project_type != concert"
+	);	
+		
+	$project_query = db_query("SELECT radio_id, series, date_display FROM `sinatra_radio` ORDER BY series ASC")->fetchAll();
+	
+	$radios[0] = "Select me if project_type != radio";
+	foreach ( $project_query as $record ) {
+		$radios[$record->radio_id] = $record->series . " - " . $record->date_display;
+	}
+	$form['radio'] = array(
+		'#type' => 'select',
+		'#title' => 'Radio',
+		'#options' => $radios,
+		'#required' => TRUE,
+		'#default_value' => "Select me if project_type != radio"
+	);	
+		
+	$project_query = db_query("SELECT television_id, series, date_display FROM `sinatra_television` ORDER BY series ASC")->fetchAll();
+	$tv[0] = "Select me if project_type != television";
+	foreach ( $project_query as $record ) {
+		$tv[$record->television_id] = $record->series . " - " . $record->date_display;
+	}
+	$form['television'] = array(
+		'#type' => 'select',
+		'#title' => 'Television',
+		'#options' => $tv,
+		'#required' => TRUE,
+		'#default_value' => "Select me if project_type != television"
+	);	
+		
+	$project_query = db_query('SELECT film_id, title FROM `sinatra_film` ORDER BY title ASC')->fetchAll();
+	$film[0] = "Select me if project_type != film";
+	foreach ( $project_query as $record ) {
+		$film[$record->film_id] = $record->title;
+	}
+	
+	$form['film'] = array(
+		'#type' => 'select',
+		'#title' => 'Film',
+		'#options' => $film,
+		'#required' => TRUE,
+		'#default_value' => "Select me if project_type != film"
+	);	
+	$form['position'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Position',
+		'#required' => TRUE,
+	);	
 	$form['length'] = array(
 		'#type' => 'textfield',
 		'#title' => 'Length',
 		'#required' => FALSE,
 	);		
-	
+	$form['matrix'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Matrix #',
+		'#required' => FALSE,
+	);		
+	$form['take'] = array(
+		'#type' => 'textfield',
+		'#title' => 'Take',
+		'#required' => FALSE,
+	);		
 	$form['notes'] = array(
 		'#type' => 'textarea',
 		'#title' => 'Notes',
 		'#required' => FALSE,
-	);		
-
-	/*$role_query = db_query('SELECT name FROM `sinatra_role`')->fetchCol();
-	$fname_query = db_query('SELECT first_name FROM `sinatra_person`')->fetchCol();
-	$sname_query = db_query('SELECT surname FROM `sinatra_person`')->fetchCol();
-	$people_query = array_merge ($fname_query, $sname_query);
+	);	
 	
-	for( $i = 0; $i < 20; $i++ ) {
-		$form['role' + $i] = array(
+	$form['lyrics'] = array(
+		'#type' => 'textarea',
+		'#title' => 'Lyrics',
+		'#required' => FALSE,
+	);	
+	
+	$role_query = db_query('SELECT role_id, name FROM `sinatra_role` ORDER BY name ASC')->fetchAll();
+	$person_query = db_query('SELECT person_id, first_name, surname FROM `sinatra_person` ORDER BY surname, first_name ASC')->fetchAll();
+	
+	$roles[0] = "-";
+	foreach ( $role_query as $record ) {
+		$roles[$record->role_id] = $record->name;
+	}
+	$peoples[0] = "-";
+	foreach ( $person_query as $record ) {
+		$peoples[$record->person_id] = $record->first_name . " " . $record->surname;
+	}
+	
+	
+    $form['people'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Personnel'),
+        '#prefix' => '<div id="people-wrapper">',
+        '#suffix' => '</div>',
+    );
+
+    if (empty($form_state['num_people'])) {
+        $form_state['num_people'] = 40;
+    }
+	
+	$form['people']['0'] = array(
+        '#type' => 'fieldset',
+        '#title' => 'Person 1',
+        '#prefix' => '<div>',
+        '#suffix' => '</div>',
+    );
+	$form['people']['0']['role'] = array(
+		'#type' => 'select',
+		'#title' => 'Role',
+		'#options' => $roles,
+		'#default_value' => 1,
+	);
+	$form['people']['0']['person'] = array(
+		'#type' => 'select',
+		'#title' => 'Person',
+		'#options' => $peoples,
+		'#default_value' => 1,
+	);	
+	for( $i = 1; $i < $form_state['num_people']; $i++ ) {
+		$form['people'][$i] = array(
+			'#type' => 'fieldset',
+			'#title' => 'Person ' . ($i+1),
+			'#prefix' => '<div>',
+			'#suffix' => '</div>',
+		);
+		$form['people'][$i]['role'] = array(
 			'#type' => 'select',
 			'#title' => 'Role',
-			'#options' => $role_query,
-			'#required' => TRUE,
-		);	
-		
-		$form['person' + $i] = array(
+			'#options' => $roles,
+			'#default' => 0,
+		);
+		$form['people'][$i]['person'] = array(
 			'#type' => 'select',
 			'#title' => 'Person',
-			'#options' => $people_query,
-			'#required' => TRUE,
+			'#options' => $peoples,
+			'#default' => 0,
 		);	
-		
-		$form['notes' + $i] = array(
-			'#type' => 'textfield',
-			'#title' => 'Notes',
-			'#required' => TRUE,
-		);	
-	}*/
-	
+	}
+	$form['people']['add_another'] = array(
+        '#type' => 'submit',
+        '#value' => t('Add another person'),
+        '#submit' => array('add_more_person'),
+        '#ajax' => array(
+            'callback' => 'add_more_person_callback',
+            'wrapper' => 'people-wrapper',
+        ),
+    );
+    
 	$form['submit_button'] = array(
 		'#type' => 'submit',
 		'#value' => t('Create'),
-        '#submit' => array('create_board_form_submit'),
+        '#submit' => array('create_recording_form_submit'),
 	);
+
 	return $form;
 }
 
-function create_board_form_submit($form, &$form_state) {
+// AJAX for songs
+function add_more_song($form, &$form_state) {
 
-	/*db_insert('sinatra_recording')
-		->fields( array( 
-			// recording_id is AUTO_INCREMENT
-			'song_id' => $form['song']['#value']+1,
-			'artist_display' => $form['artist']['#value'],
-			'date' => $form['date']['#value'],
-			'date_display' => $form['date_display']['#value'],
-			'type' => $form['type']['#value'],
-			'project_id' => $form['project']['#value']+1,
-			'length' => $form['length']['#value'],
-			'notes' => $form['notes']['#value'],
-		))
-		->execute();*/
+    if (!isset($form_state['num_names'])) {
+        $form_state['num_names'] = 0;
+        $form_state['num_names']++;
+    }
+
+    $form_state['num_names']++;
+    $form_state['rebuild'] = TRUE;
+}
+
+function add_more_song_callback($form, $form_state) {
+    return $form['songs'];
+}
+
+function add_more_person($form, &$form_state) {
+
+    if (!isset($form_state['num_people'])) {
+        $form_state['num_people'] = 40;
+        $form_state['num_people']++;
+    }
+
+    $form_state['num_people']++;
+    $form_state['rebuild'] = TRUE;
+}
+
+function add_more_person_callback($form, $form_state) {
+    return $form['people'];
+}
+
+function create_recording_form_submit($form, &$form_state) {
+	global $base_url;
+	
+	$num_songs = $form_state['num_names'];
+	$num_people = $form_state['num_people'];
+	$parody = $form['songs']['parody']['#value'];
+	$artist = $form['artist']['#value'];
+	$session = $form['session']['#value'];
+	$session_position = $form['session_position']['#value'];
+	$type = $form['type']['#value'];
+	$proj_type = $form['proj_type']['#value'];
+	$album = $form['album']['#value'];
+	$concert = $form['concert']['#value'];
+	$radio = $form['radio']['#value'];
+	$television = $form['television']['#value'];
+	$film = $form['film']['#value'];
+	$position = $form['position']['#value'];
+	$length = $form['length']['#value'];
+	$matrix = $form['matrix']['#value'];
+	$take = $form['take']['#value'];
+	$notes = $form['notes']['#value'];
+	$lyrics = $form['lyrics']['#value'];
+	
+	if( $proj_type == 'album' && $album == 0 ) {
+		$form_state['storage']['results'] = "ERROR - PLEASE PROVIDE ALBUM";
+	} else if( $proj_type == 'concert' && $concert == 0 ) {
+		$form_state['storage']['results'] = "ERROR - PLEASE PROVIDE CONCERT";
+	} else if( $proj_type == 'radio' && $radio == 0 ) {
+		$form_state['storage']['results'] = "ERROR - PLEASE PROVIDE RADIO";
+	} else if( $proj_type == 'television' && $television == 0 ) {
+		$form_state['storage']['results'] = "ERROR - PLEASE PROVIDE TELEVISION";
+	} else if( $proj_type == 'film' && $film == 0 ) {
+		$form_state['storage']['results'] = "ERROR - PLEASE PROVIDE FILM";
+	} else {
+		$id = db_insert('sinatra_recording')
+			->fields( array( 
+				// recording_id is AUTO_INCREMENT
+				'artist_display' => $artist,
+				'type' => $type,
+				'length' => $length,
+				'lyrics' => $lyrics,
+				'notes' => $notes,
+				'project_type' => $proj_type,
+				'take_number' => $take,
+				'matrix_number' => $matrix
+			))
+			->execute();
+			
+		for ($i = 0; $i < $num_songs; $i++) {
+			$song = $form['songs']['song'][$i]['#value'];
+			if( $song != 0 && $song != null ) {
+				db_insert('sinatra_recording_song')
+					->fields( array( 
+						'recording_id' => $id,
+						'song_id' => $song,
+						'medley_position' => $i+1,
+						'parody'=>$parody
+					))
+					->execute();
+			}
+		}
 		
+		db_insert('sinatra_session_recording')
+				->fields( array( 
+					'recording_id' => $id,
+					'session_id' => $session,
+					'session_position' => $session_position,
+				))
+				->execute();
+		
+		if( $proj_type == 'album' ) {
+			db_insert('sinatra_recording_album')
+				->fields( array( 
+					'recording_id' => $id,
+					'album_id' => $album,
+					'album_position' => $position
+				))
+				->execute();			
+		} else if( $proj_type == 'concert' ) {
+			db_insert('sinatra_recording_concert')
+				->fields( array( 
+					'recording_id' => $id,
+					'concert_id' => $concert,
+					'concert_position' => $position
+				))
+				->execute();			
+		} else if( $proj_type == 'film' ) {
+			db_insert('sinatra_recording_film')
+				->fields( array( 
+					'recording_id' => $id,
+					'film_id' => $film,
+					'film_position' => $position
+				))
+				->execute();			
+		} else if( $proj_type == 'television' ) {
+			db_insert('sinatra_recording_television')
+				->fields( array( 
+					'recording_id' => $id,
+					'television_id' => $television,
+					'television_position' => $position
+				))
+				->execute();			
+		} else {
+			db_insert('sinatra_recording_radio')
+				->fields( array( 
+					'recording_id' => $id,
+					'radio_id' => $radio,
+					'radio_position' => $position
+				))
+				->execute();			
+		}
+		
+		$loop = 0;
+		for ($i = 0; $i < $num_people; $i++) {
+			$role = $form['people'][$i]['role']['#value'];
+			$person = $form['people'][$i]['person']['#value'];
+			if( $role != 0 && $person != 0 ) {
+				$loop++;
+				db_insert('sinatra_recording_person')
+					->fields( array( 
+						'recording_id' => $id,
+						'person_id' => $person,
+						'role_id' => $role,
+					))
+					->execute();
+			}
+		}
+		
+		$form_state['storage']['results'] = '<a href="' . $base_url . '/recording/' . $id .'">' . "Your recording has been added as recording #" . $id . "</a>";
+		$form_state['storage']['results'] = $form_state['values'];
+	}	
+	$form_state['rebuild'] = TRUE;
 }	

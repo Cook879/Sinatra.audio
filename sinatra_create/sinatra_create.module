@@ -24,7 +24,6 @@ function sinatra_create_form($form, &$form_state) {
 	global $user;
 	
 	if(isset($form_state['storage']['results'])) {
-		print_r($form_state['storage']['results']);
 	  $form['results'] = array (
             '#markup' => $form_state['storage']['results'],
             '#prefix' => '<p>',
@@ -57,6 +56,7 @@ function sinatra_create_form($form, &$form_state) {
 			'#title' => 'Song',
 			'#options' => $songs,
 			'#required' => TRUE,        
+		'#validated' => TRUE,
 		);
     }
 
@@ -222,7 +222,11 @@ function sinatra_create_form($form, &$form_state) {
 		'#title' => 'Lyrics',
 		'#required' => FALSE,
 	);	
-	
+	$form['youtube'] = array(
+		'#type' => 'textfield',
+		'#title' => 'YouTube',
+		'#required' => FALSE,
+	);		
 	$role_query = db_query('SELECT role_id, name FROM `sinatra_role` ORDER BY name ASC')->fetchAll();
 	$person_query = db_query('SELECT person_id, first_name, surname FROM `sinatra_person` ORDER BY surname, first_name ASC')->fetchAll();
 	
@@ -235,55 +239,45 @@ function sinatra_create_form($form, &$form_state) {
 		$peoples[$record->person_id] = $record->first_name . " " . $record->surname;
 	}
 	
+	//print_r($form_state);
 	
     $form['people'] = array(
         '#type' => 'fieldset',
         '#title' => t('Personnel'),
         '#prefix' => '<div id="people-wrapper">',
         '#suffix' => '</div>',
-    );
+ '#tree' => TRUE,   );
 
     if (empty($form_state['num_people'])) {
-        $form_state['num_people'] = 40;
+        $form_state['num_people'] = 5;
     }
-	
-	$form['people']['0'] = array(
-        '#type' => 'fieldset',
-        '#title' => 'Person 1',
-        '#prefix' => '<div>',
-        '#suffix' => '</div>',
-    );
-	$form['people']['0']['role'] = array(
-		'#type' => 'select',
-		'#title' => 'Role',
-		'#options' => $roles,
-		'#default_value' => 1,
-	);
-	$form['people']['0']['person'] = array(
-		'#type' => 'select',
-		'#title' => 'Person',
-		'#options' => $peoples,
-		'#default_value' => 1,
-	);	
-	for( $i = 1; $i < $form_state['num_people']; $i++ ) {
+		
+	for( $i = 0; $i < $form_state['num_people']; $i++ ) {
 		$form['people'][$i] = array(
 			'#type' => 'fieldset',
 			'#title' => 'Person ' . ($i+1),
 			'#prefix' => '<div>',
 			'#suffix' => '</div>',
+			
 		);
+		
 		$form['people'][$i]['role'] = array(
 			'#type' => 'select',
 			'#title' => 'Role',
 			'#options' => $roles,
-			'#default' => 0,
+			'#default_value' => 0,
+			'#required' => TRUE,
+			'#validated' => TRUE
 		);
 		$form['people'][$i]['person'] = array(
 			'#type' => 'select',
 			'#title' => 'Person',
 			'#options' => $peoples,
-			'#default' => 0,
+			'#default_value' => 0,
+			'#required' => TRUE,
+			'#validated' => TRUE
 		);	
+
 	}
 	$form['people']['add_another'] = array(
         '#type' => 'submit',
@@ -357,6 +351,7 @@ function create_recording_form_submit($form, &$form_state) {
 	$take = $form['take']['#value'];
 	$notes = $form['notes']['#value'];
 	$lyrics = $form['lyrics']['#value'];
+	$youtube = $form['youtube']['#value'];
 	
 	if( $proj_type == 'album' && $album == 0 ) {
 		$form_state['storage']['results'] = "ERROR - PLEASE PROVIDE ALBUM";
@@ -404,6 +399,15 @@ function create_recording_form_submit($form, &$form_state) {
 					'session_position' => $session_position,
 				))
 				->execute();
+		if( $youtube != null ) {
+			db_insert('sinatra_recording_source')
+					->fields( array( 
+						'recording_id' => $id,
+						'source' => "YouTube",
+						'id' => $youtube,
+					))
+					->execute();
+		}
 		
 		if( $proj_type == 'album' ) {
 			db_insert('sinatra_recording_album')
@@ -464,7 +468,6 @@ function create_recording_form_submit($form, &$form_state) {
 		}
 		
 		$form_state['storage']['results'] = '<a href="' . $base_url . '/recording/' . $id .'">' . "Your recording has been added as recording #" . $id . "</a>";
-		$form_state['storage']['results'] = $form_state['values'];
 	}	
 	$form_state['rebuild'] = TRUE;
 }	

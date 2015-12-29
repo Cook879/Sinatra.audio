@@ -13,15 +13,23 @@ function sinatra_create_menu() {
 		'create/recording' => array(
 			'title' => 'Create new recording',
 			'page callback' => 'drupal_get_form',
-			'page arguments' => array('sinatra_create_form'),
+			'page arguments' => array('sinatra_create_form', '0'),
+			'access callback' => TRUE,
+		),
+		'create/recording/%' => array(
+			'title' => 'Create new recording',
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array('sinatra_create_form', 2),
 			'access callback' => TRUE,
 		),
 	);
 	return $items;
 }
 
-function sinatra_create_form($form, &$form_state) {
+function sinatra_create_form($form, &$form_state, $id) {
 	global $user;
+	
+	$firstPass = true;
 	
 	if(isset($form_state['storage']['results'])) {
 	  $form['results'] = array (
@@ -29,6 +37,7 @@ function sinatra_create_form($form, &$form_state) {
             '#prefix' => '<p>',
             '#suffix' => '</p>',
 	  );
+	  $firstPass = false;
 	}
 		
 	$song_query = db_query('SELECT song_id, title FROM `sinatra_song` ORDER BY `title`'	)->fetchAll();
@@ -44,12 +53,29 @@ function sinatra_create_form($form, &$form_state) {
         '#prefix' => '<div id="entry-fieldset-wrapper">',
         '#suffix' => '</div>',
     );
+	
+	if( $id != 0 ) {
+		$form_state['recording_id'] = $id;
+	}
 
     if (empty($form_state['num_names'])) {
-        $form_state['num_names'] = 1;
-    }
+		if( $id != 0 ) {
 
-    for ($i = 0; $i < $form_state['num_names']; $i++) {
+			$query = db_query("SELECT * FROM `sinatra_recording_song` WHERE recording_id = :id",
+			array(
+				':id' => $id,
+			))->fetchAllAssoc('medley_position');	
+		
+			$form_state['num_names'] = count($query);
+		} else {	
+			$form_state['num_names'] = 1;
+		}
+	} else {
+		$firstPass = false;
+	}
+     
+	
+	for ($i = 0; $i < $form_state['num_names']; $i++) {
 
         $form['songs']['song'][$i] = array(
 			'#type' => 'select',
@@ -59,6 +85,22 @@ function sinatra_create_form($form, &$form_state) {
 		'#validated' => TRUE,
 		);
     }
+	
+	$form['songs']['parody'] = array(
+		'#type' => 'checkbox',
+		'#title' => 'Parody',
+	);
+
+	if( $id != 0 && $firstPass ) {
+		$count = 0;
+		foreach ($query as $record) {
+			$form['songs']['song'][$count]['#default_value'] = $record->song_id;
+			$count++;
+			if( $record->parody ) {
+				$form['songs']['parody']['#value'] = TRUE;
+			}
+		}
+	}
 
     $form['songs']['add_another'] = array(
         '#type' => 'submit',
@@ -69,11 +111,7 @@ function sinatra_create_form($form, &$form_state) {
             'wrapper' => 'entry-fieldset-wrapper',
         ),
     );
-    
-	$form['songs']['parody'] = array(
-		'#type' => 'checkbox',
-		'#title' => 'Parody',
-	);	
+	
 	
 	$artist_query = db_query('SELECT display_id, display_name FROM `sinatra_artist_display` ORDER BY `display_name` ASC'	)->fetchAll();
 	
@@ -130,6 +168,8 @@ function sinatra_create_form($form, &$form_state) {
 	foreach ( $project_query as $record ) {
 		$albums[$record->album_id] = $record->title;
 	}
+	
+	// TODO MULTIPLE ALBUMS?
 	$form['album'] = array(
 		'#type' => 'select',
 		'#title' => 'Album',
@@ -227,6 +267,95 @@ function sinatra_create_form($form, &$form_state) {
 		'#title' => 'YouTube',
 		'#required' => FALSE,
 	);		
+	
+	
+	// End first section 
+	/////////////////
+	
+	// Start get info for editing previous
+	if( $id != 0  && $firstPass) {
+		$query = db_query('SELECT * FROM `sinatra_recording`, `sinatra_session_recording` WHERE sinatra_recording.recording_id = :id AND sinatra_session_recording.recording_id = :id',
+								array(
+									':id' => $id,
+								))->fetchAssoc();
+
+		$form['artist']['#value'] = $query['artist_display'];
+		$form['type']['#value'] = $query['type'];
+		$form['length']['#value'] = $query['length'];
+		$form['lyrics']['#value'] = $query['lyrics'];
+		$form['notes']['#value'] = $query['notes'];
+		$form['proj_type']['#value'] = $query['project_type'];
+		$form['take']['#value'] = $query['take_number'];
+		$form['matrix']['#value'] = $query['matrix_number'];
+		$form['session']['#value'] = $query['session_id'];
+		$form['session_position']['#value'] = $query['session_position'];
+		
+		if( $query['project_type'] == "album" ) {
+			$query = db_query('SELECT * FROM `sinatra_recording_album` WHERE recording_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();	
+			$form['album']['#value'] = $query['album_id'];
+			$form['position']['#value'] = $query['album_position'];
+		} else if( $query['project_type'] == "concert" ) {
+			$query = db_query('SELECT * FROM `sinatra_recording_concert` WHERE recording_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();	
+			$form['concert']['#value'] = $query['concert_id'];
+			$form['position']['#value'] = $query['concert_position'];
+		} else if( $query['project_type'] == "radio" ) {
+			$query = db_query('SELECT * FROM `sinatra_recording_radio` WHERE recording_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();	
+			$form['radio']['#value'] = $query['radio_id'];
+			$form['position']['#value'] = $query['radio_position'];
+	
+			print_r($query);
+		} else if( $query['project_type'] == "film" ) {
+			$query = db_query('SELECT * FROM `sinatra_recording_film` WHERE recording_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();	
+			$form['film']['#value'] = $query['film_id'];
+			$form['position']['#value'] = $query['film_position'];
+	
+			print_r($query);
+		} else if( $query['project_type'] == "television" ) {
+			$query = db_query('SELECT * FROM `sinatra_recording_television` WHERE recording_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();	
+			$form['television']['#value'] = $query['television_id'];
+			$form['position']['#value'] = $query['television_position'];
+	
+			print_r($query);
+		} else if( $query['project_type'] == "album" ) {
+			$query = db_query('SELECT * FROM `sinatra_recording_album` WHERE recording_id = :id',
+				array(
+					':id' => $id,
+				))->fetchAssoc();	
+			$form['album']['#value'] = $query['album_id'];
+			$form['position']['#value'] = $query['album_position'];
+	
+			print_r($query);
+		} 
+		
+		$query = db_query("SELECT * FROM `sinatra_recording_source` WHERE recording_id = :id AND source='YouTube'",
+			array(
+				':id' => $id,
+			))->fetchAssoc();	
+			$form['youtube']['#value'] = $query['id'];
+		
+	}
+	
+	
+	// End edit info
+	///////////////////
+	
+	// Start people
+	
 	$role_query = db_query('SELECT role_id, name FROM `sinatra_role` ORDER BY name ASC')->fetchAll();
 	$person_query = db_query('SELECT person_id, first_name, surname FROM `sinatra_person` ORDER BY surname, first_name ASC')->fetchAll();
 	
@@ -246,11 +375,24 @@ function sinatra_create_form($form, &$form_state) {
         '#title' => t('Personnel'),
         '#prefix' => '<div id="people-wrapper">',
         '#suffix' => '</div>',
- '#tree' => TRUE,   );
+		'#tree' => TRUE,   
+	);
 
     if (empty($form_state['num_people'])) {
-        $form_state['num_people'] = 5;
+		if( $id != 0 ) {
+			$query = db_query("SELECT * FROM `sinatra_recording_person` WHERE recording_id = :id",
+			array(
+				':id' => $id,
+			))->fetchAll();	
+		
+			$form_state['num_people'] = count($query);
+		} else {
+			$form_state['num_people'] = 40;
+		}
     }
+	
+
+
 		
 	for( $i = 0; $i < $form_state['num_people']; $i++ ) {
 		$form['people'][$i] = array(
@@ -277,8 +419,17 @@ function sinatra_create_form($form, &$form_state) {
 			'#required' => TRUE,
 			'#validated' => TRUE
 		);	
-
 	}
+	
+	if( $id != 0  && $firstPass) {
+		$count = 0;
+		foreach ($query as $record) {
+			$form['people'][$count]['role']['#default_value'] = $record->role_id;
+			$form['people'][$count]['person']['#default_value'] = $record->person_id;
+			$count++;
+		}
+	}
+
 	$form['people']['add_another'] = array(
         '#type' => 'submit',
         '#value' => t('Add another person'),
@@ -332,6 +483,20 @@ function add_more_person_callback($form, $form_state) {
 function create_recording_form_submit($form, &$form_state) {
 	global $base_url;
 	
+	if( !empty($form_state['recording_id']) ) {
+		$recording_id = $form_state['recording_id'];
+		db_delete('sinatra_recording')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_person')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_song')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_source')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_session_recording')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_album')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_concert')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_radio')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_film')->condition('recording_id', $recording_id)->execute();
+		db_delete('sinatra_recording_television')->condition('recording_id', $recording_id)->execute();
+	}
+	
 	$num_songs = $form_state['num_names'];
 	$num_people = $form_state['num_people'];
 	$parody = $form['songs']['parody']['#value'];
@@ -364,20 +529,36 @@ function create_recording_form_submit($form, &$form_state) {
 	} else if( $proj_type == 'film' && $film == 0 ) {
 		$form_state['storage']['results'] = "ERROR - PLEASE PROVIDE FILM";
 	} else {
-		$id = db_insert('sinatra_recording')
-			->fields( array( 
-				// recording_id is AUTO_INCREMENT
-				'artist_display' => $artist,
-				'type' => $type,
-				'length' => $length,
-				'lyrics' => $lyrics,
-				'notes' => $notes,
-				'project_type' => $proj_type,
-				'take_number' => $take,
-				'matrix_number' => $matrix
-			))
-			->execute();
-			
+		if( !empty($form_state['recording_id']) ) {
+			$id = $form_state['recording_id'];
+			db_insert('sinatra_recording')
+				->fields( array( 
+					'recording_id' => $id,
+					'artist_display' => $artist,
+					'type' => $type,
+					'length' => $length,
+					'lyrics' => $lyrics,
+					'notes' => $notes,
+					'project_type' => $proj_type,
+					'take_number' => $take,
+					'matrix_number' => $matrix
+				))
+				->execute();
+		} else {
+			$id = db_insert('sinatra_recording')
+				->fields( array( 
+					// recording_id is AUTO_INCREMENT
+					'artist_display' => $artist,
+					'type' => $type,
+					'length' => $length,
+					'lyrics' => $lyrics,
+					'notes' => $notes,
+					'project_type' => $proj_type,
+					'take_number' => $take,
+					'matrix_number' => $matrix
+				))
+				->execute();
+		}
 		for ($i = 0; $i < $num_songs; $i++) {
 			$song = $form['songs']['song'][$i]['#value'];
 			if( $song != 0 && $song != null ) {

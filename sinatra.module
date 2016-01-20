@@ -153,7 +153,13 @@ function sinatra_view_recording ($id) {
 
 	if( $recording_id != $id ) 
 		drupal_goto('http://sinatra.audio/node/8');
-	else {	
+	else {
+		if (in_array('administrator', $user->roles)) {
+			$output = '<a href="http://sinatra.audio/create/recording/' . $id . '">Edit</a>';
+		} else {
+			$output = '';
+		}
+	
 		// SQL TIME!
 		$recording_query = db_query('SELECT * FROM `sinatra_recording`, `sinatra_session_recording` WHERE sinatra_recording.recording_id = :id AND sinatra_session_recording.recording_id = :id',
 								array(
@@ -291,7 +297,7 @@ function sinatra_view_recording ($id) {
 		drupal_set_title($title);
 		
 		// Display artist, open rec and rec-left-col
-		$output = '<h3>' . $artist_display . '</h3><div id="rec"><div id="rec-left-col">';
+		$output .= '<h3>' . $artist_display . '</h3><div id="rec"><div id="rec-left-col">';
 							
 		// Info table
 		// Empty table == broken

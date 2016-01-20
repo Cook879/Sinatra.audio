@@ -14,16 +14,26 @@ function sinatra_create_menu() {
 			'title' => 'Create new recording',
 			'page callback' => 'drupal_get_form',
 			'page arguments' => array('sinatra_create_form', '0'),
-			'access callback' => TRUE,
+			'access arguments' => array('sinatra_create'),
 		),
 		'create/recording/%' => array(
 			'title' => 'Create new recording',
 			'page callback' => 'drupal_get_form',
 			'page arguments' => array('sinatra_create_form', 2),
-			'access callback' => TRUE,
+			'access arguments' => array('sinatra_create'),
+
 		),
 	);
 	return $items;
+}
+
+function sinatra_create_permission() {
+  return array(
+    'sinatra_create' => array(
+      'title' => t('Create'),
+      'description' => t('Create.'),
+    ),
+  );
 }
 
 function sinatra_create_form($form, &$form_state, $id) {
